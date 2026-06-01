@@ -30,6 +30,13 @@ const commands = [
     .toJSON(),
 
   new SlashCommandBuilder()
+    .setName('getkey')
+    .setDescription('DM a user their license key info (mod only)')
+    .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .toJSON(),
+
+  new SlashCommandBuilder()
     .setName('mykeys')
     .setDescription('DM you your active Exon license keys')
     .toJSON(),
@@ -109,21 +116,62 @@ function startBot() {
       const keys = db.getUserKeys(interaction.user.id);
 
       if (!keys.length) {
-        await interaction.editReply('No active keys linked. Visit **exoncheats.com**, log in with Discord, and paste your key.');
+        await interaction.editReply('You have no active keys linked. Visit **exoncheats.com**, log in with Discord, and paste your key to link it.');
         return;
       }
 
       const embed = new EmbedBuilder()
         .setColor(ROLE_COLORS.customer)
+        .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
         .setTitle('Your Active Keys')
-        .setDescription(keys.map((k, i) => `**${i + 1}.** \`${k.key_value}\` — ${k.plan ?? 'License'}`).join('\n'))
-        .setFooter({ text: 'Keep these private.' });
+        .setDescription(keys.map((k, i) =>
+          `**${i + 1}.** \`${k.key_value}\`\n` +
+          `> Plan: ${k.plan ?? 'License'}`
+        ).join('\n\n'))
+        .setFooter({ text: 'Keep these private — do not share your keys.' })
+        .setTimestamp();
 
       try {
         await interaction.user.send({ embeds: [embed] });
-        await interaction.editReply('Sent to your DMs.');
+        await interaction.editReply('✅ Sent to your DMs! Check your direct messages.');
       } catch {
-        await interaction.editReply({ embeds: [embed] });
+        // DMs closed — reply ephemerally instead
+        await interaction.editReply({ content: '❌ I couldn\'t DM you. Please enable DMs from server members in your privacy settings, then try again.', embeds: [embed] });
+      }
+      return;
+    }
+
+    // /getkey (mod only)
+    if (interaction.commandName === 'getkey') {
+      await interaction.deferReply({ ephemeral: true });
+      const target = interaction.options.getUser('user');
+      const user   = db.getUser(target.id);
+      const keys   = user ? db.getUserKeys(target.id) : [];
+
+      if (!keys.length) {
+        await interaction.editReply(`**${target.username}** has no active keys linked.`);
+        return;
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(ROLE_COLORS[user?.role] ?? 0x404858)
+        .setAuthor({ name: target.username, iconURL: target.displayAvatarURL() })
+        .setTitle('License Key Info')
+        .setDescription(keys.map((k, i) =>
+          `**${i + 1}.** \`${k.key_value}\`\n` +
+          `> Plan: ${k.plan ?? 'License'}\n` +
+          `> Created: <t:${k.created_at}:R>`
+        ).join('\n\n'))
+        .setFooter({ text: `Requested by ${interaction.user.username}` })
+        .setTimestamp();
+
+      // DM the target user
+      try {
+        await target.send({ embeds: [embed] });
+        await interaction.editReply(`✅ Sent **${target.username}**'s key info to their DMs.`);
+      } catch {
+        // Can't DM target — send to mod ephemerally
+        await interaction.editReply({ content: `❌ Couldn't DM ${target.username} (DMs closed). Here's their info:`, embeds: [embed] });
       }
       return;
     }
