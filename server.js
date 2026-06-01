@@ -324,7 +324,13 @@ app.get('/api/check/:discordId', requireAuth, (req, res) => {
 const PORT = process.env.PORT ?? 3000;
 app.listen(PORT, () => {
   console.log(`Exon server running → http://localhost:${PORT}`);
-  // Start Discord bot in same process
-  const { startBot } = require('./bot');
-  startBot();
+  try {
+    console.log('Loading bot module...');
+    const { startBot } = require('./bot');
+    console.log('Bot module loaded, calling startBot...');
+    startBot();
+  } catch (err) {
+    console.error('Bot failed to start:', err.message);
+    console.error(err.stack);
+  }
 });
