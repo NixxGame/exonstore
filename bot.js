@@ -63,8 +63,10 @@ if (process.argv.includes('--register')) {
 // ── Start bot ─────────────────────────────────────────────────────────────────
 
 function startBot() {
+  console.log('Starting Discord bot...');
+
   if (!process.env.DISCORD_BOT_TOKEN) {
-    console.warn('DISCORD_BOT_TOKEN not set — bot not started');
+    console.error('DISCORD_BOT_TOKEN not set — bot not started');
     return;
   }
 
@@ -73,6 +75,8 @@ function startBot() {
   });
 
   client.once('ready', () => console.log(`Bot ready as ${client.user.tag}`));
+
+  client.on('error', err => console.error('Bot error:', err.message));
 
   // Auto-assign Member role on join
   client.on('guildMemberAdd', async member => {
@@ -213,7 +217,10 @@ function startBot() {
     }
   });
 
-  client.login(process.env.DISCORD_BOT_TOKEN);
+  client.login(process.env.DISCORD_BOT_TOKEN)
+    .then(() => console.log('Bot login successful'))
+    .catch(err => console.error('Bot login failed:', err.message));
+
   return client;
 }
 
