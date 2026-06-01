@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exon External</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="bg-canvas">
+  <div class="bg-noise"></div>
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-orb bg-orb-3"></div>
+  <div class="bg-grid"></div>
+  <canvas id="particles"></canvas>
+</div>
+
+<nav id="nav">
+  <a href="#" class="logo-wrap">
+    <img src="assets/exon.png" alt="Exon">
+    <span>Exon External</span>
+  </a>
+  <div class="nav-links">
+    <a href="#overview">Overview</a>
+    <a href="#feature-list">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+    <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener">Discord</a>
+    <div class="nav-auth">
+      <!-- shown when not logged in -->
+      <a id="nav-login" href="/auth/discord" class="nav-login-btn">
+        <svg width="16" height="12" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.44077 45.4204 0.52529C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.52529C25.5141 0.44359 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.292408 45.3914C0.29803 45.4562 0.335026 45.518 0.385427 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6022 45.5576C70.6554 45.518 70.6895 45.4590 70.6952 45.3942C72.1435 30.0791 68.2108 16.7757 60.1919 4.9823C60.1724 4.9429 60.1388 4.9147 60.1045 4.8978Z" fill="currentColor"/>
+        </svg>
+        Login with Discord
+      </a>
+      <!-- shown when logged in -->
+      <button id="nav-profile-btn" class="nav-profile-btn" style="display:none;" onclick="toggleProfileCard()">
+        <img id="nav-avatar" src="" alt="" width="28" height="28">
+        <span id="nav-username" class="nav-profile-name"></span>
+        <span id="nav-role-dot" class="nav-role-dot" data-role="member"></span>
+      </button>
+    </div>
+    <a href="#pricing" class="nav-cta">Get Access →</a>
+  </div>
+</nav>
+
+<!-- ── PROFILE CARD ── -->
+<div id="profile-card-overlay" class="profile-card-overlay" onclick="handleOverlayClick(event)">
+  <div class="profile-card" id="profile-card" data-role="member">
+    <div class="profile-banner">
+      <div class="profile-avatar-wrap">
+        <img id="pc-avatar" class="profile-avatar" src="" alt="">
+        <div class="profile-avatar-ring"></div>
+      </div>
+    </div>
+    <div class="profile-body">
+      <div id="pc-username" class="profile-username"></div>
+      <div id="pc-role-badge" class="profile-role-badge" data-role="member">Member</div>
+
+      <!-- Role tags in hierarchy order -->
+      <div id="pc-roles" class="profile-roles"></div>
+
+      <div class="profile-divider"></div>
+
+      <div class="profile-keys-label">Active Keys</div>
+      <div id="pc-keys" class="profile-keys-list">
+        <div class="profile-no-keys">No keys linked yet.</div>
+      </div>
+
+      <!-- Link a key -->
+      <div class="profile-keys-label" style="margin-top:14px;">Link a Key</div>
+      <div class="profile-link-form">
+        <input id="pc-key-input" type="text" placeholder="exon-XXXX-XXXX-XXXX-test">
+        <button onclick="linkKey()">Link</button>
+      </div>
+      <div id="pc-link-msg" class="profile-link-msg"></div>
+
+      <button class="profile-signout" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<section class="hero">
+
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    Live — Instant Delivery
+  </div>
+
+  <div class="hero-logo-wrap">
+    <div class="hero-logo-ring-2"></div>
+    <div class="hero-logo-ring"></div>
+    <img src="assets/exon.png" alt="Exon External" class="hero-logo">
+  </div>
+
+  <h1>
+    <span class="word-exon">Exon</span>&nbsp;<span class="word-external">External</span>
+  </h1>
+
+  <p class="hero-sub">
+    Secure checkout, instant delivery,<br>and reliable support — whenever you need it.
+  </p>
+
+  <div class="hero-buttons">
+    <a href="#pricing" class="primary-btn">Purchase Now</a>
+    <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener" class="secondary-btn">Join Discord</a>
+  </div>
+
+  <div class="scroll-hint">
+    <div class="scroll-mouse"></div>
+    <span>Scroll</span>
+  </div>
+
+</section>
+
+<div class="section-divider"></div>
+
+<!-- OVERVIEW CARDS -->
+<section id="overview">
+
+  <div class="section-eyebrow">Why Exon</div>
+  <h2 class="section-title">Built for reliability</h2>
+
+  <div class="cards">
+
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h3>Instant Delivery</h3>
+      <p>Receive access automatically the moment your payment is confirmed — no waiting, no manual steps.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-icon">🔒</div>
+      <h3>Secure Payments</h3>
+      <p>All transactions are encrypted and processed through Stripe, one of the world's most trusted payment platforms.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-icon">🎧</div>
+      <h3>Dedicated Support</h3>
+      <p>Fast, responsive support through Discord tickets. Our team is ready to help whenever you need us.</p>
+    </div>
+
+  </div>
+
+</section>
+
+<div class="section-divider"></div>
+
+<!-- FEATURE LIST -->
+<section id="feature-list">
+
+  <div class="section-eyebrow">Capabilities</div>
+  <h2 class="section-title">Feature List</h2>
+
+  <div class="feat-tabs">
+    <button class="feat-tab active" data-tab="esp">ESP</button>
+    <button class="feat-tab" data-tab="auras">Auras</button>
+    <button class="feat-tab" data-tab="info">Player Info</button>
+    <button class="feat-tab" data-tab="misc">Misc</button>
+  </div>
+
+  <div class="feat-panels">
+
+    <div class="feat-panel active" id="tab-esp">
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Survivor ESP</strong>
+            <p>See all survivors through walls with customizable bounding boxes and skeleton overlays.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer ESP</strong>
+            <p>Track the killer's position at all times with distance readout and direction indicator.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Bone / Skeleton Rendering</strong>
+            <p>Full skeleton overlay on survivors and killers for precise positional awareness.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Distance Display</strong>
+            <p>Real-time distance in meters displayed beneath every entity's name tag.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Snap Lines</strong>
+            <p>Optional lines drawn from the center of the screen to each entity for quick scanning.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>2D Minimap Radar</strong>
+            <p>Compact overhead radar showing all entity positions relative to your own.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Customizable Colors</strong>
+            <p>Per-entity color settings for boxes, skeletons, and snap lines via the in-overlay config.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Visibility Check</strong>
+            <p>Color-coded indicator showing whether an entity is visible or obscured by geometry.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feat-panel" id="tab-auras">
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Generator Auras</strong>
+            <p>All generators highlighted with real-time repair progress percentage displayed.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Hook Auras</strong>
+            <p>All hooks shown on the overlay including state (empty, occupied, broken) and use count.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Chest Auras</strong>
+            <p>Locate every chest on the map — opened and unopened — at a glance.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Totem Auras</strong>
+            <p>All dull and hex totems revealed with a clear type label so you can prioritize cleansing.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Hatch Aura</strong>
+            <p>Hatch location shown the moment it spawns so you always know the escape route.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Exit Gate Auras</strong>
+            <p>Both exit gates highlighted as soon as generators are complete.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Pallet Auras</strong>
+            <p>Standing and dropped pallets marked so you can plan looping routes in advance.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Item Auras</strong>
+            <p>Ground items and dropped items visible through the map at all times.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feat-panel" id="tab-info">
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Survivor Health States</strong>
+            <p>Displays each survivor's current state: Healthy, Injured, Dying, or Hooked.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Hook Stage Tracker</strong>
+            <p>See exactly how many times each survivor has been hooked including sacrifice progress.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Carried Survivor Indicator</strong>
+            <p>Clear highlight when a survivor is being carried toward a hook.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Survivor Item Display</strong>
+            <p>Shows the item each survivor is holding with an icon label next to their name.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Obsession Highlight</strong>
+            <p>Obsession target always clearly distinguished from other survivors.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Identity</strong>
+            <p>Killer character name and power type shown in the HUD as soon as the match starts.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Terror Radius</strong>
+            <p>Visual ring showing the killer's current terror radius so you can react before hearing it.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Name Tags</strong>
+            <p>Steam display names shown above each survivor so you always know who is who.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feat-panel" id="tab-misc">
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>External Overlay</strong>
+            <p>Renders entirely outside the game process — no injection, no DLL, minimal detection surface.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Hotkey Toggle</strong>
+            <p>Bind any key to show or hide the overlay and individual feature categories on the fly.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>In-Overlay Config Menu</strong>
+            <p>Full settings panel accessible in-game — adjust colors, toggles, and distances without Alt-Tab.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Auto-Updater</strong>
+            <p>Automatically fetches the latest build on launch so you're always running the newest version.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>HWID Lock</strong>
+            <p>License is locked to your hardware ID to prevent sharing and protect your account.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Smooth Rendering</strong>
+            <p>60 FPS overlay rendering with interpolation for a clean, stutter-free visual experience.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<div class="section-divider"></div>
+
+<section id="pricing">
+
+  <div class="section-eyebrow">Licensing</div>
+  <h2 class="section-title">Purchase a License</h2>
+
+  <div class="pricing-box">
+    <script async src="https://js.stripe.com/v3/pricing-table.js"></script>
+    <stripe-pricing-table
+      pricing-table-id="prctbl_1TdaqM2UtKaemIpmwVgBrMON"
+      publishable-key="pk_live_51SFwcA2UtKaemIpmvH6h0kX0LqjM3dgX5mRiORwbnZ7WIIUWWhQ7O8i15CYlow41bS78Y41epE4PtOxItnndltkh007zFdsJjR">
+    </stripe-pricing-table>
+  </div>
+
+</section>
+
+<div class="section-divider"></div>
+
+<section id="faq">
+
+  <div class="section-eyebrow">Support</div>
+  <h2 class="section-title">Frequently Asked Questions</h2>
+
+  <div class="faq">
+
+    <div class="faq-item">
+      <h3>How do I receive access?</h3>
+      <p>Instructions are sent automatically right after a successful checkout. Check your email and follow the steps provided.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>What payment methods are accepted?</h3>
+      <p>We accept Credit Cards, Debit Cards, PayPal, and Cash App Pay — all processed securely via Stripe.</p>
+    </div>
+
+    <div class="faq-item">
+      <h3>Need help?</h3>
+      <p>Join our <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener">Discord server</a> and open a support ticket. Our team responds quickly.</p>
+    </div>
+
+  </div>
+
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <img src="assets/exon.png" alt="Exon">
+      Exon External
+    </div>
+    <div class="footer-links">
+      <a href="terms.html">Terms of Service</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="refund.html">Refund Policy</a>
+      <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener">Discord</a>
+    </div>
+    <p class="footer-copy">© 2026 Exon External. All rights reserved.</p>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
