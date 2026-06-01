@@ -1,15 +1,8 @@
 /**
  * Exon External — Backend Server
  *
- * Handles:
- *  - Static file serving
- *  - Discord OAuth2 login
- *  - JWT auth
- *  - Key linking + role promotion
- *  - Stripe webhook → key generation + email
- *
  * Install:
- *   npm install express stripe better-sqlite3 jsonwebtoken axios cors dotenv
+ *   npm install express stripe jsonwebtoken axios cors dotenv
  *
  * Run:
  *   node server.js
@@ -17,61 +10,95 @@
 
 require('dotenv').config();
 
-const express    = require('express');
-const cors       = require('cors');
-const path       = require('path');
-const fs         = require('fs');
-const axios      = require('axios');
-const jwt        = require('jsonwebtoken');
-const stripe     = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const Database   = require('better-sqlite3');
+const express = require('express');
+const cors    = require('cors');
+const path    = require('path');
+const fs      = require('fs');
+const axios   = require('axios');
+const jwt     = require('jsonwebtoken');
+const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// ── Database ────────────────────────────────────────────────────────────────
+// ── JSON Database ─────────────────────────────────────────────────────────────
 
 const dataDir = path.join(__dirname, 'data');
+const dbPath  = path.join(dataDir, 'db.json');
+
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+if (!fs.existsSync(dbPath))  fs.writeFileSync(dbPath, JSON.stringify({ users: {}, keys: {} }, null, 2));
 
-const db = new Database(path.join(dataDir, 'exon.db'));
-db.pragma('journal_mode = WAL');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    discord_id  TEXT PRIMARY KEY,
-    username    TEXT NOT NULL,
-    avatar      TEXT,
-    role        TEXT NOT NULL DEFAULT 'member',
-    created_at  INTEGER NOT NULL DEFAULT (unixepoch())
-  );
+function readDB() {
+  return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+}
 
-  CREATE TABLE IF NOT EXISTS keys (
-    key_value         TEXT PRIMARY KEY,
-    discord_id        TEXT,
-    active            INTEGER NOT NULL DEFAULT 1,
-    plan              TEXT,
-    stripe_session_id TEXT,
-    customer_email    TEXT,
-    created_at        INTEGER NOT NULL DEFAULT (unixepoch()),
-    FOREIGN KEY (discord_id) REFERENCES users(discord_id)
-  );
-`);
+function writeDB(data) {
+  fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
+}
 
-const getUser   = db.prepare('SELECT * FROM users WHERE discord_id = ?');
-const getKey    = db.prepare('SELECT * FROM keys WHERE key_value = ?');
-const getUserKeys = db.prepare('SELECT * FROM keys WHERE discord_id = ? AND active = 1 ORDER BY created_at DESC');
-const upsertUser  = db.prepare(`
-  INSERT INTO users (discord_id, username, avatar)
-  VALUES (?, ?, ?)
-  ON CONFLICT(discord_id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar
-`);
+// DB helpers that mirror the old SQLite API
+const db = {
+  getUser(discordId) {
+    return readDB().users[discordId] ?? null;
+  },
+  upsertUser(discordId, username, avatar) {
+    const data = readDB();
+    data.users[discordId] = {
+      discord_id: discordId,
+      username,
+      avatar,
+      role: data.users[discordId]?.role ?? 'member',
+      created_at: data.users[discordId]?.created_at ?? Math.floor(Date.now() / 1000),
+    };
+    writeDB(data);
+  },
+  setUserRole(discordId, role) {
+    const data = readDB();
+    if (data.users[discordId]) {
+      data.users[discordId].role = role;
+      writeDB(data);
+    }
+  },
+  getKey(keyValue) {
+    return readDB().keys[keyValue] ?? null;
+  },
+  insertKey(keyValue, plan, sessionId, email) {
+    const data = readDB();
+    if (!data.keys[keyValue]) {
+      data.keys[keyValue] = {
+        key_value: keyValue,
+        discord_id: null,
+        active: true,
+        plan,
+        stripe_session_id: sessionId,
+        customer_email: email,
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      writeDB(data);
+    }
+  },
+  linkKey(keyValue, discordId) {
+    const data = readDB();
+    if (data.keys[keyValue]) {
+      data.keys[keyValue].discord_id = discordId;
+      writeDB(data);
+    }
+  },
+  getUserKeys(discordId) {
+    const data = readDB();
+    return Object.values(data.keys)
+      .filter(k => k.discord_id === discordId && k.active)
+      .sort((a, b) => b.created_at - a.created_at);
+  },
+};
 
-// ── Role helpers ─────────────────────────────────────────────────────────────
+// ── Role helpers ──────────────────────────────────────────────────────────────
 
 const ROLE_ORDER = ['member', 'customer', 'staff', 'developer'];
 
 function promoteUser(discordId, targetRole) {
-  const user = getUser.get(discordId);
+  const user = db.getUser(discordId);
   if (!user) return;
   if (ROLE_ORDER.indexOf(user.role) < ROLE_ORDER.indexOf(targetRole)) {
-    db.prepare('UPDATE users SET role = ? WHERE discord_id = ?').run(targetRole, discordId);
+    db.setUserRole(discordId, targetRole);
     assignDiscordRole(discordId, `DISCORD_ROLE_${targetRole.toUpperCase()}`);
   }
 }
@@ -115,7 +142,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// ── Key generation ─────────────────────────────────────────────────────────────
+// ── Key generation ────────────────────────────────────────────────────────────
 
 function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -191,16 +218,11 @@ async function sendKeyEmail(to, key, plan) {
   return res.data;
 }
 
-// ── Express ──────────────────────────────────────────────────────────────────
+// ── Express ───────────────────────────────────────────────────────────────────
 
 const app = express();
 
-app.use(cors({
-  origin: process.env.SITE_URL ?? '*',
-  credentials: true,
-}));
-
-// Serve static site files
+app.use(cors({ origin: process.env.SITE_URL ?? '*', credentials: true }));
 app.use(express.static(path.join(__dirname)));
 
 // ── Discord OAuth ─────────────────────────────────────────────────────────────
@@ -220,7 +242,6 @@ app.get('/auth/discord/callback', async (req, res) => {
   if (!code) return res.redirect('/?error=no_code');
 
   try {
-    // Exchange code for access token
     const tokenRes = await axios.post(
       'https://discord.com/api/oauth2/token',
       new URLSearchParams({
@@ -233,20 +254,17 @@ app.get('/auth/discord/callback', async (req, res) => {
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
 
-    // Get Discord user info
     const userRes = await axios.get('https://discord.com/api/v10/users/@me', {
       headers: { Authorization: `Bearer ${tokenRes.data.access_token}` },
     });
 
-    const { id, username, discriminator, avatar } = userRes.data;
+    const { id, username, avatar } = userRes.data;
     const avatarUrl = avatar
       ? `https://cdn.discordapp.com/avatars/${id}/${avatar}.png?size=128`
-      : `https://cdn.discordapp.com/embed/avatars/${(BigInt(id) >> 22n) % 6n}.png`;
+      : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(id) % 6n)}.png`;
 
-    // Upsert user record
-    upsertUser.run(id, username, avatarUrl);
+    db.upsertUser(id, username, avatarUrl);
 
-    // Issue JWT and redirect back to site
     const token = issueToken(id);
     res.redirect(`/?token=${token}`);
   } catch (err) {
@@ -255,12 +273,12 @@ app.get('/auth/discord/callback', async (req, res) => {
   }
 });
 
-// ── API: me ─────────────────────────────────────────────────────────────────
+// ── API: me ───────────────────────────────────────────────────────────────────
 
 app.get('/api/me', requireAuth, (req, res) => {
-  const user = getUser.get(req.discordId);
+  const user = db.getUser(req.discordId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const keys = getUserKeys.all(req.discordId);
+  const keys = db.getUserKeys(req.discordId);
   res.json({ ...user, keys });
 });
 
@@ -270,37 +288,34 @@ app.post('/api/link-key', requireAuth, express.json(), (req, res) => {
   const { key } = req.body ?? {};
   if (!key) return res.status(400).json({ error: 'Key is required' });
 
-  const existing = getKey.get(key);
-  if (!existing)          return res.status(404).json({ error: 'Key not found' });
-  if (existing.discord_id) return res.status(409).json({ error: 'Key is already linked to an account' });
-  if (!existing.active)   return res.status(410).json({ error: 'Key is no longer active' });
+  const existing = db.getKey(key);
+  if (!existing)            return res.status(404).json({ error: 'Key not found' });
+  if (existing.discord_id)  return res.status(409).json({ error: 'Key is already linked to an account' });
+  if (!existing.active)     return res.status(410).json({ error: 'Key is no longer active' });
 
-  db.prepare('UPDATE keys SET discord_id = ? WHERE key_value = ?').run(req.discordId, key);
-
-  // Make sure the user record exists (might be logging in fresh)
-  const user = getUser.get(req.discordId);
+  const user = db.getUser(req.discordId);
   if (!user) return res.status(404).json({ error: 'User record not found — please log in first' });
 
+  db.linkKey(key, req.discordId);
   promoteUser(req.discordId, 'customer');
 
   res.json({ success: true });
 });
 
-// ── API: mod — check user license ─────────────────────────────────────────────
-// (Requires staff/developer role — validated by bot; this endpoint is for internal use)
+// ── API: mod check ────────────────────────────────────────────────────────────
 
 app.get('/api/check/:discordId', requireAuth, (req, res) => {
-  const caller = getUser.get(req.discordId);
+  const caller = db.getUser(req.discordId);
   if (!caller || !['staff', 'developer'].includes(caller.role)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  const target = getUser.get(req.params.discordId);
+  const target = db.getUser(req.params.discordId);
   if (!target) return res.status(404).json({ error: 'User not found' });
-  const keys = getUserKeys.all(req.params.discordId);
+  const keys = db.getUserKeys(req.params.discordId);
   res.json({ ...target, keys });
 });
 
-// ── Stripe webhook ─────────────────────────────────────────────────────────────
+// ── Stripe webhook ────────────────────────────────────────────────────────────
 
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -319,12 +334,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     const plan    = session.metadata?.plan ?? null;
 
     const key = generateKey();
-
-    // Store key in DB (unlinked until user logs in and claims it)
-    db.prepare(`
-      INSERT OR IGNORE INTO keys (key_value, active, plan, stripe_session_id, customer_email)
-      VALUES (?, 1, ?, ?, ?)
-    `).run(key, plan, session.id, email);
+    db.insertKey(key, plan, session.id, email);
 
     if (email) {
       try {
@@ -342,6 +352,4 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT ?? 3000;
-app.listen(PORT, () => {
-  console.log(`Exon server running → http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Exon server running → http://localhost:${PORT}`));
