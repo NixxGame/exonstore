@@ -144,10 +144,50 @@ function requireAuth(req, res, next) {
 
 // ── Key generation ────────────────────────────────────────────────────────────
 
+const IS_TEST = (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_');
+
 function generateKey() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const seg   = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `exon-${seg()}-${seg()}-${seg()}-test`;
+  const chars  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const seg    = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const suffix = IS_TEST ? '-test' : '';
+  return `exon-${seg()}-${seg()}-${seg()}${suffix}`;
+}
+
+// ── Cloudflare KV ────────────────────────────────────────────────────────────
+
+function planToMinutes(plan) {
+  if (!plan) return null;
+  const p = plan.toLowerCase();
+  if (p.includes('3 month')) return 129600;
+  if (p.includes('month'))   return 43200;
+  if (p.includes('week'))    return 10080;
+  if (p.includes('day'))     return 1440;
+  return null;
+}
+
+async function writeKeyToCF(key, discordId, plan) {
+  const accountId  = process.env.CF_ACCOUNT_ID;
+  const namespaceId = process.env.CF_KV_NAMESPACE_ID;
+  const apiToken   = process.env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) return;
+
+  const value = JSON.stringify({
+    key,
+    discord_id:   discordId ?? null,
+    hwid:         null,
+    time_created: Date.now(),
+    length:       planToMinutes(plan),
+  });
+
+  try {
+    await axios.put(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`,
+      value,
+      { headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'text/plain' } }
+    );
+  } catch (err) {
+    console.error('CF KV write error:', err.response?.data ?? err.message);
+  }
 }
 
 // ── Email (Resend) ────────────────────────────────────────────────────────────
@@ -244,6 +284,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
     const key = generateKey();
     db.insertKey(key, plan, session.id, email);
+    await writeKeyToCF(key, null, plan);
 
     if (email) {
       try {
