@@ -223,6 +223,41 @@ async function sendKeyEmail(to, key, plan) {
 const app = express();
 
 app.use(cors({ origin: process.env.SITE_URL ?? '*', credentials: true }));
+
+// ── Stripe webhook (must be before express.static and body parsers) ───────────
+
+app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Stripe signature error:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const email   = session.customer_details?.email ?? session.customer_email;
+    const plan    = session.metadata?.plan ?? null;
+
+    const key = generateKey();
+    db.insertKey(key, plan, session.id, email);
+
+    if (email) {
+      try {
+        await sendKeyEmail(email, key, plan);
+        console.log(`Key emailed to ${email}: ${key}`);
+      } catch (err) {
+        console.error('Email error:', err.message);
+      }
+    }
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.static(path.join(__dirname)));
 
 // ── Discord OAuth ─────────────────────────────────────────────────────────────
@@ -313,40 +348,6 @@ app.get('/api/check/:discordId', requireAuth, (req, res) => {
   if (!target) return res.status(404).json({ error: 'User not found' });
   const keys = db.getUserKeys(req.params.discordId);
   res.json({ ...target, keys });
-});
-
-// ── Stripe webhook ────────────────────────────────────────────────────────────
-
-app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Stripe signature error:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const email   = session.customer_details?.email ?? session.customer_email;
-    const plan    = session.metadata?.plan ?? null;
-
-    const key = generateKey();
-    db.insertKey(key, plan, session.id, email);
-
-    if (email) {
-      try {
-        await sendKeyEmail(email, key, plan);
-        console.log(`Key emailed to ${email}: ${key}`);
-      } catch (err) {
-        console.error('Email error:', err.message);
-      }
-    }
-  }
-
-  res.json({ received: true });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
