@@ -749,7 +749,17 @@ app.post('/api/reset-hwid', requireAuth, express.json(), async (req, res) => {
   const cf = await cfRead(key_value);
   if (!cf) return res.status(404).json({ error: 'Key not found in CF' });
 
-  cf.hwid = null;
+  // 1 reset per 30 days
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  if (cf.hwid_reset_at && Date.now() - cf.hwid_reset_at < THIRTY_DAYS) {
+    const nextReset = new Date(cf.hwid_reset_at + THIRTY_DAYS);
+    return res.status(429).json({
+      error: `HWID already reset this month. Next reset available ${nextReset.toDateString()}.`
+    });
+  }
+
+  cf.hwid          = null;
+  cf.hwid_reset_at = Date.now();
   await cfWrite(key_value, cf);
   console.log(`HWID reset for key ${key_value} by ${req.discordId}`);
 
