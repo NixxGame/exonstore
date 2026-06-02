@@ -438,6 +438,7 @@ app.get('/auth/discord/callback', async (req, res) => {
       loaderStates.set(loaderState, {
         discord_id: id,
         username,
+        avatar:     avatarUrl,
         jwt:        token,
         expires_at: Date.now() + 10 * 60 * 1000,
       });
@@ -636,17 +637,13 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
 // ── API: loader poll (OAuth flow) ─────────────────────────────────────────────
 
 app.get('/api/loader/poll/:state', (req, res) => {
-  const auth = req.headers.authorization ?? '';
-  if (auth !== `Bearer ${process.env.LOADER_SECRET}`)
-    return res.status(401).json({ ready: false });
-
   const entry = loaderStates.get(req.params.state);
   if (!entry || entry.expires_at < Date.now()) {
     loaderStates.delete(req.params.state);
     return res.json({ ready: false });
   }
 
-  res.json({ ready: true, discord_id: entry.discord_id, username: entry.username, jwt: entry.jwt });
+  res.json({ ready: true, discord_id: entry.discord_id, username: entry.username, avatar: entry.avatar, jwt: entry.jwt });
 });
 
 // ── API: loader member check ──────────────────────────────────────────────────
@@ -677,17 +674,20 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return res.status(400).json({ valid: false, reason: 'discord_id and hwid required' });
   }
 
-  const userKeys = db.getUserKeys(discord_id);
+  let userKeys = db.getUserKeys(discord_id);
+
+  // If not in local DB, try restoring from CF first
+  if (!userKeys.length) {
+    await restoreUserFromCF(discord_id);
+    userKeys = db.getUserKeys(discord_id);
+  }
   if (!userKeys.length) {
     return res.json({ valid: false, reason: 'No active key found for this account' });
   }
 
-  // Load all CF entries, sort by purchase date (oldest first = first to run)
-  const cfEntries = [];
-  for (const k of userKeys) {
-    const cf = await cfRead(k.key_value);
-    if (cf) cfEntries.push({ k, cf });
-  }
+  // Load all CF entries in parallel, sort by purchase date (oldest first = first to run)
+  const cfResults = await Promise.all(userKeys.map(k => cfRead(k.key_value).then(cf => cf ? { k, cf } : null)));
+  const cfEntries = cfResults.filter(Boolean);
   cfEntries.sort((a, b) => (a.cf.purchased_at ?? 0) - (b.cf.purchased_at ?? 0));
 
   // ── Dual verification ─────────────────────────────────────────────────────
@@ -699,13 +699,13 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   }
 
   // ── Bind HWID to ALL keys immediately (lock against transfer before activation) ──
-  for (const entry of cfEntries) {
+  await Promise.all(cfEntries.map(async entry => {
     if (!entry.cf.hwid) {
       entry.cf.hwid = hwid;
       await cfWrite(entry.k.key_value, entry.cf);
       console.log(`HWID locked on queued key ${entry.k.key_value} for ${discord_id}`);
     }
-  }
+  }));
 
   // ── Find and start the current key (first with time remaining, else first queued) ──
   let currentEntry = null;
