@@ -68,47 +68,43 @@ function renderProfileCard(user) {
     rolesEl.appendChild(span);
   });
 
-  // Keys — show one combined license block
+  // Keys — active first (full details), queued below (compact), scrollable
   const keysEl = document.getElementById('pc-keys');
   keysEl.innerHTML = '';
 
-  if (user.keys && user.keys.length > 0) {
-    const totalMs    = user.combined_ms ?? 0;
-    const activated  = user.combined_activated ?? false;
-    const timeLeft   = totalMs > 0 ? formatTimeLeft(Date.now() + totalMs) : (activated ? 'Expired' : formatMinutes(
-      user.keys.reduce((sum, k) => sum + 0, 0) // placeholder until CF data loads
-    ));
-
-    const div = document.createElement('div');
-    div.className = 'profile-key-item';
-    div.innerHTML = `
-      <div class="profile-key-header" id="combined-key-header">
-        <span class="profile-key-value">Exon External License</span>
-        <span class="profile-key-plan ${totalMs > 0 ? 'key-active' : ''}">${totalMs > 0 ? formatTimeLeft(Date.now() + totalMs) : (activated ? 'Expired' : 'Not Activated')}</span>
-      </div>
-      <div class="profile-key-details" id="kd-combined">
-        <div class="key-detail-loading">Loading...</div>
-      </div>
-    `;
-    div.querySelector('.profile-key-header').addEventListener('click', () => toggleCombinedDetails(user.keys));
-    keysEl.appendChild(div);
-  } else {
+  if (!user.keys || user.keys.length === 0) {
     keysEl.innerHTML = '<div class="profile-no-keys">No keys linked yet.</div>';
-  }
-}
-
-async function toggleCombinedDetails(keys) {
-  const el = document.getElementById('kd-combined');
-  if (el.classList.contains('open')) {
-    el.classList.remove('open');
-    document.querySelector('.profile-key-item')?.classList.remove('expanded');
     return;
   }
-  el.classList.add('open');
-  document.querySelector('.profile-key-item')?.classList.add('expanded');
 
+  const totalMs = user.combined_ms ?? 0;
+  const timeStr = totalMs > 0 ? formatTimeLeft(Date.now() + totalMs) : 'Not Activated';
+  const timeCol = totalMs > 0 ? 'key-active' : '';
+
+  // Combined header
+  const header = document.createElement('div');
+  header.className = 'profile-key-item';
+  header.innerHTML = `
+    <div class="profile-key-header">
+      <span class="profile-key-value">Exon External License</span>
+      <span class="profile-key-plan ${timeCol}">${timeStr}</span>
+    </div>
+  `;
+  keysEl.appendChild(header);
+
+  // Scrollable key list
+  const scroll = document.createElement('div');
+  scroll.className = 'key-scroll-list';
+  scroll.innerHTML = '<div class="key-detail-loading">Loading...</div>';
+  keysEl.appendChild(scroll);
+
+  // Load all keys then render
+  loadKeyList(user.keys, scroll);
+}
+
+async function loadKeyList(keys, container) {
   const token = localStorage.getItem('exon_token');
-  let html = '';
+  const results = [];
 
   for (const k of keys) {
     try {
@@ -116,8 +112,29 @@ async function toggleCombinedDetails(keys) {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) continue;
+      if (res.ok) results.push({ k, data });
+    } catch {}
+  }
 
+  if (!results.length) {
+    container.innerHTML = '<div class="key-detail-err">Could not load key details.</div>';
+    return;
+  }
+
+  // Sort: active first, then queued
+  results.sort((a, b) => {
+    const order = { active: 0, queued: 1 };
+    return (order[a.k.queue_status] ?? 2) - (order[b.k.queue_status] ?? 2);
+  });
+
+  container.innerHTML = '';
+  results.forEach(({ k, data }, i) => {
+    const isActive = k.queue_status === 'active';
+    const entry    = document.createElement('div');
+    entry.className = 'key-list-entry' + (isActive ? ' key-list-active' : ' key-list-queued');
+
+    if (isActive) {
+      // Full details for active key
       const purchased = data.purchased_at ? new Date(data.purchased_at).toLocaleString() : '—';
       const activated = data.activated_at ? new Date(data.activated_at).toLocaleString() : 'Not yet';
       const expires   = data.expires_at   ? new Date(data.expires_at).toLocaleString()   : (data.activated_at ? 'Never' : 'Not Redeemed');
@@ -125,29 +142,38 @@ async function toggleCombinedDetails(keys) {
                       : data.expires_at ? formatTimeLeft(data.expires_at)
                       : data.activated_at ? '∞'
                       : formatMinutes(data.length);
-      const hwid      = data.hwid ?? null;
-      const hwidHtml  = hwid
-        ? `<span class="key-hwid-wrap"><span class="key-hwid">${hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}', this)">Reset</button></span>`
+      const hwidHtml  = data.hwid
+        ? `<span class="key-hwid-wrap"><span class="key-hwid">${data.hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}',this)">Reset</button></span>`
         : `<span class="key-not-activated">Run the loader to activate</span>`;
 
-      const statusBadge = k.queue_status === 'active'  ? `<span class="key-queue-badge active">Active</span>`
-                        : k.queue_status === 'queued' ? `<span class="key-queue-badge queued">Queued</span>`
-                        : '';
-
-      html += `
-        <div class="key-sub-entry">
-          <div class="key-sub-label">${k.plan ?? 'License'} ${statusBadge}</div>
-          <div class="key-detail-row"><span>Purchased</span><span>${purchased}</span></div>
-          <div class="key-detail-row"><span>Activated</span><span>${activated}</span></div>
-          <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
-          <div class="key-detail-row"><span>Time Left</span><span class="${data.expired ? 'key-expired' : 'key-active'}">${timeLeft}</span></div>
-          <div class="key-detail-row hwid-row"><span>HWID</span>${hwidHtml}</div>
+      entry.innerHTML = `
+        <div class="key-list-label">${k.plan ?? 'License'} <span class="key-queue-badge active">Active</span></div>
+        <div class="key-detail-row"><span>Purchased</span><span>${purchased}</span></div>
+        <div class="key-detail-row"><span>Activated</span><span>${activated}</span></div>
+        <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
+        <div class="key-detail-row"><span>Time Left</span><span class="${data.expired ? 'key-expired' : 'key-active'}">${timeLeft}</span></div>
+        <div class="key-detail-row hwid-row"><span>HWID</span>${hwidHtml}</div>
+      `;
+    } else {
+      // Compact row for queued keys
+      const purchased = data.purchased_at ? new Date(data.purchased_at).toLocaleDateString() : '—';
+      const timeLeft  = formatMinutes(data.length);
+      entry.innerHTML = `
+        <div class="key-list-compact">
+          <div class="key-list-compact-left">
+            <span class="key-queue-badge queued">Queued</span>
+            <span class="key-list-compact-plan">${k.plan ?? 'License'}</span>
+          </div>
+          <div class="key-list-compact-right">
+            <span class="key-list-compact-time">${timeLeft}</span>
+            <span class="key-list-compact-date">${purchased}</span>
+          </div>
         </div>
       `;
-    } catch { continue; }
-  }
+    }
 
-  el.innerHTML = html || '<div class="key-detail-err">Could not load details.</div>';
+    container.appendChild(entry);
+  });
 }
 
 async function toggleKeyDetails(keyValue) {
