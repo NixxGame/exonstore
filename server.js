@@ -279,10 +279,46 @@ app.get('/auth/discord/callback', async (req, res) => {
 
 // ── API: me ───────────────────────────────────────────────────────────────────
 
-app.get('/api/me', requireAuth, (req, res) => {
+// Map Discord role IDs → internal role names (in priority order)
+const DISCORD_ROLE_MAP = () => [
+  { name: 'developer', id: process.env.DISCORD_ROLE_DEVELOPER },
+  { name: 'staff',     id: process.env.DISCORD_ROLE_STAFF },
+  { name: 'customer',  id: process.env.DISCORD_ROLE_CUSTOMER },
+  { name: 'member',    id: process.env.DISCORD_ROLE_MEMBER },
+];
+
+async function getHighestDiscordRole(discordId) {
+  const guildId  = process.env.DISCORD_GUILD_ID;
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!guildId || !botToken) return null;
+
+  try {
+    const res = await axios.get(
+      `https://discord.com/api/v10/guilds/${guildId}/members/${discordId}`,
+      { headers: { Authorization: `Bot ${botToken}` } }
+    );
+    const memberRoles = res.data.roles ?? [];
+    for (const { name, id } of DISCORD_ROLE_MAP()) {
+      if (id && memberRoles.includes(id)) return name;
+    }
+    return 'member';
+  } catch {
+    return null;
+  }
+}
+
+app.get('/api/me', requireAuth, async (req, res) => {
   const user = db.getUser(req.discordId);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const keys = db.getUserKeys(req.discordId);
+
+  // Sync role from Discord
+  const discordRole = await getHighestDiscordRole(req.discordId);
+  if (discordRole && discordRole !== user.role) {
+    db.setUserRole(req.discordId, discordRole);
+    user.role = discordRole;
+  }
+
   res.json({ ...user, keys });
 });
 
