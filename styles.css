@@ -208,6 +208,31 @@ nav.scrolled {
   position: relative;
 }
 
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .75rem;
+  color: var(--text-dim);
+}
+
+.stat-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74,222,128,.6);
+  animation: pulse 2s infinite;
+}
+
 .hero-badge {
   display: inline-flex;
   align-items: center;

@@ -5,6 +5,18 @@ const API = ''; // empty = same origin; set to 'https://your-server.com' if host
 const ROLE_ORDER = ['member', 'customer', 'staff', 'developer'];
 const ROLE_LABELS = { member: 'Member', customer: 'Customer', staff: 'Staff', developer: 'Developer' };
 
+// ── Stats bar ─────────────────────────────────────────────────────────────────
+(async function loadStats() {
+  try {
+    const res  = await fetch('/api/stats');
+    const data = await res.json();
+    const el   = document.getElementById('stat-active-users');
+    if (el && data.active_users !== undefined) {
+      el.textContent = data.active_users.toLocaleString();
+    }
+  } catch {}
+})();
+
 // On load: grab token from URL (after Discord OAuth redirect) or localStorage
 (function initAuth() {
   const params = new URLSearchParams(window.location.search);

@@ -461,6 +461,16 @@ app.get('/auth/discord/callback', async (req, res) => {
   }
 });
 
+// ── API: public stats ─────────────────────────────────────────────────────────
+
+app.get('/api/stats', (req, res) => {
+  const data   = require('./db');
+  const keys   = Object.values(require('fs').existsSync('./data/db.json')
+    ? JSON.parse(require('fs').readFileSync('./data/db.json')).keys : {});
+  const active = keys.filter(k => k.active && k.discord_id).length;
+  res.json({ active_users: active });
+});
+
 // ── API: me ───────────────────────────────────────────────────────────────────
 
 // Map Discord role IDs → internal role names (in priority order)
