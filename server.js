@@ -236,7 +236,7 @@ app.get('/auth/discord', (req, res) => {
     client_id:     process.env.DISCORD_CLIENT_ID,
     redirect_uri:  process.env.DISCORD_REDIRECT_URI,
     response_type: 'code',
-    scope:         'identify',
+    scope:         'identify guilds.join',
   });
   res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
@@ -268,6 +268,21 @@ app.get('/auth/discord/callback', async (req, res) => {
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(id) % 6n)}.png`;
 
     db.upsertUser(id, username, avatarUrl);
+
+    // Auto-join Discord server
+    const guildId  = process.env.DISCORD_GUILD_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    if (guildId && botToken) {
+      try {
+        await axios.put(
+          `https://discord.com/api/v10/guilds/${guildId}/members/${id}`,
+          { access_token: tokenRes.data.access_token },
+          { headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' } }
+        );
+      } catch (err) {
+        console.log('Guild join:', err.response?.status, err.response?.data?.message ?? err.message);
+      }
+    }
 
     const token = issueToken(id);
     res.redirect(`/?token=${token}`);
