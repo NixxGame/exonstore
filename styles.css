@@ -181,20 +181,90 @@ nav.scrolled {
   background: rgba(255,255,255,.05);
 }
 
-.nav-loader-btn {
-  color: #fff !important;
-  background: rgba(255,255,255,.08) !important;
-  border: 1px solid rgba(255,255,255,.14) !important;
-  padding: 7px 14px !important;
-  border-radius: var(--r-sm) !important;
-  font-size: .82rem !important;
-  font-weight: 500 !important;
-  text-decoration: none !important;
-  transition: all .2s !important;
+/* ── DOWNLOAD SECTION ── */
+
+.dl-card {
+  max-width: 640px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 24px 28px;
 }
-.nav-loader-btn:hover {
-  background: rgba(255,255,255,.14) !important;
-  box-shadow: 0 0 14px rgba(255,255,255,.08);
+
+.dl-file-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dl-file-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  background: var(--orange-dim);
+  border: 1px solid rgba(240,122,18,.2);
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dl-file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dl-file-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  font-family: monospace;
+  letter-spacing: .02em;
+}
+
+.dl-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.dl-badge {
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--orange);
+  background: var(--orange-dim);
+  border: 1px solid rgba(240,122,18,.2);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.dl-size {
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  background: var(--orange);
+  color: #fff;
+  font-weight: 600;
+  font-size: .88rem;
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  transition: background .2s, box-shadow .2s;
+  flex-shrink: 0;
+}
+
+.dl-btn:hover {
+  background: var(--orange-lt);
+  box-shadow: 0 0 20px rgba(240,122,18,.35);
 }
 
 .nav-cta {

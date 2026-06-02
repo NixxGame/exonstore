@@ -1,3 +1,21 @@
+// ── LOADER FILE SIZE ──────────────────────────────────────────────────────
+(async function fetchLoaderSize() {
+  const el = document.getElementById('dl-size');
+  if (!el) return;
+  try {
+    const res = await fetch('releases/loader.exe', { method: 'HEAD' });
+    const bytes = parseInt(res.headers.get('content-length') || '0', 10);
+    if (bytes > 0) {
+      const mb = (bytes / (1024 * 1024)).toFixed(2);
+      el.textContent = mb + ' MB';
+    } else {
+      el.textContent = '';
+    }
+  } catch {
+    el.textContent = '';
+  }
+})();
+
 // ── AUTH & PROFILE ─────────────────────────────────────────────────────────
 
 const API = ''; // empty = same origin; set to 'https://your-server.com' if hosted separately
