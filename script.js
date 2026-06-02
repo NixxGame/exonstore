@@ -113,13 +113,15 @@ async function toggleKeyDetails(keyValue) {
     const data = await res.json();
     if (!res.ok) { el.innerHTML = `<div class="key-detail-err">${data.error}</div>`; return; }
 
-    const created  = data.time_created ? new Date(data.time_created).toLocaleString() : '—';
-    const expires  = data.expires_at   ? new Date(data.expires_at).toLocaleString()   : 'Never';
-    const timeLeft = data.expires_at && !data.expired ? formatTimeLeft(data.expires_at) : (data.expired ? 'Expired' : '∞');
-    const hwid     = data.hwid ?? 'Not activated yet';
+    const purchased  = data.purchased_at  ? new Date(data.purchased_at).toLocaleString()  : '—';
+    const activated  = data.activated_at  ? new Date(data.activated_at).toLocaleString()  : 'Not yet';
+    const expires    = data.expires_at    ? new Date(data.expires_at).toLocaleString()    : 'Never';
+    const timeLeft   = data.expires_at && !data.expired ? formatTimeLeft(data.expires_at) : (data.expired ? 'Expired' : '∞');
+    const hwid       = data.hwid ?? 'Not activated yet';
 
     el.innerHTML = `
-      <div class="key-detail-row"><span>Created</span><span>${created}</span></div>
+      <div class="key-detail-row"><span>Purchased</span><span>${purchased}</span></div>
+      <div class="key-detail-row"><span>Activated</span><span>${activated}</span></div>
       <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
       <div class="key-detail-row"><span>Time Left</span><span class="${data.expired ? 'key-expired' : 'key-active'}">${timeLeft}</span></div>
       <div class="key-detail-row hwid-row"><span>HWID</span><span class="key-hwid">${hwid}</span></div>

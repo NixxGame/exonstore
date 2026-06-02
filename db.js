@@ -57,4 +57,8 @@ module.exports = {
       .filter(k => k.discord_id === discordId && k.active)
       .sort((a, b) => b.created_at - a.created_at);
   },
+  deactivateKey(keyValue) {
+    const data = readDB();
+    if (data.keys[keyValue]) { data.keys[keyValue].active = false; writeDB(data); }
+  },
 };

@@ -25,7 +25,8 @@ function json(data, status = 200) {
 }
 
 function isExpired(entry) {
-  if (!entry.length) return false; // no expiry = lifetime
+  if (!entry.length)       return false; // no expiry = lifetime
+  if (!entry.time_created) return false; // not activated yet — can't expire
   const expiresAt = entry.time_created + entry.length * 60 * 1000;
   return Date.now() > expiresAt;
 }
@@ -56,9 +57,10 @@ export default {
         return json({ error: 'HWID mismatch — key is bound to a different machine' }, 403);
       }
 
-      // First activation — bind HWID
+      // First activation — bind HWID and start the expiry clock
       if (!entry.hwid) {
-        entry.hwid = hwid;
+        entry.hwid         = hwid;
+        entry.time_created = Date.now(); // expiry starts now, not at purchase
         await env.KEYS.put(key, JSON.stringify(entry));
       }
 

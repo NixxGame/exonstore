@@ -140,7 +140,8 @@ async function writeKeyToCF(key, discordId, plan) {
     key,
     discord_id:   discordId ?? null,
     hwid:         null,
-    time_created: Date.now(),
+    time_created: null,        // set on first activation by loader, not on purchase
+    purchased_at: Date.now(),
     length:       planToMinutes(plan),
     active:       true,
   });
@@ -442,41 +443,67 @@ app.get('/api/key/:keyValue', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Key not found' });
   }
 
-  const cf = await cfRead(req.params.keyValue);
-  const timeCreated = cf?.time_created ?? (local.created_at * 1000);
-  const length      = cf?.length ?? null;
-  const expiresAt   = length ? timeCreated + length * 60 * 1000 : null;
+  const cf           = await cfRead(req.params.keyValue);
+  const activatedAt  = cf?.time_created ?? null;   // null until loader activates
+  const purchasedAt  = cf?.purchased_at ?? (local.created_at * 1000);
+  const length       = cf?.length ?? null;
+  const expiresAt    = activatedAt && length ? activatedAt + length * 60 * 1000 : null;
 
   res.json({
-    key_value:    local.key_value,
-    plan:         local.plan ?? 'License',
-    active:       local.active,
-    hwid:         cf?.hwid ?? null,
-    time_created: timeCreated,
-    expires_at:   expiresAt,
-    expired:      expiresAt ? Date.now() > expiresAt : false,
+    key_value:     local.key_value,
+    plan:          local.plan ?? 'License',
+    active:        local.active,
+    hwid:          cf?.hwid ?? null,
+    purchased_at:  purchasedAt,
+    activated_at:  activatedAt,
+    expires_at:    expiresAt,
+    expired:       expiresAt ? Date.now() > expiresAt : false,
   });
 });
 
 // ── API: link key ─────────────────────────────────────────────────────────────
 
-app.post('/api/link-key', requireAuth, express.json(), (req, res) => {
+app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   const { key } = req.body ?? {};
   if (!key) return res.status(400).json({ error: 'Key is required' });
 
-  const existing = db.getKey(key);
-  if (!existing)            return res.status(404).json({ error: 'Key not found' });
-  if (existing.discord_id)  return res.status(409).json({ error: 'Key is already linked to an account' });
-  if (!existing.active)     return res.status(410).json({ error: 'Key is no longer active' });
+  const incoming = db.getKey(key);
+  if (!incoming)            return res.status(404).json({ error: 'Key not found' });
+  if (incoming.discord_id)  return res.status(409).json({ error: 'Key is already linked to an account' });
+  if (!incoming.active)     return res.status(410).json({ error: 'Key is no longer active' });
 
   const user = db.getUser(req.discordId);
   if (!user) return res.status(404).json({ error: 'User record not found — please log in first' });
 
+  // ── Stacking: find existing active key for this user ─────────────────────
+  const incomingCF  = await cfRead(key);
+  const addMinutes  = incomingCF?.length ?? null;
+  const userKeys    = db.getUserKeys(req.discordId);
+  const activeKey   = userKeys.find(k => k.active);
+
+  if (activeKey && addMinutes) {
+    const existingCF = await cfRead(activeKey.key_value);
+    if (existingCF) {
+      const currentLength = existingCF.length ?? 0;
+      existingCF.length   = currentLength + addMinutes;
+      await cfWrite(activeKey.key_value, existingCF);
+
+      // Mark incoming key as consumed (linked + deactivated)
+      db.linkKey(key, req.discordId);
+      db.deactivateKey(key);
+      await cfWrite(key, { ...incomingCF, discord_id: req.discordId, active: false, stacked_into: activeKey.key_value });
+
+      console.log(`Stacked ${addMinutes}m onto ${activeKey.key_value} for ${req.discordId}`);
+      return res.json({ success: true, stacked: true, stacked_into: activeKey.key_value });
+    }
+  }
+
+  // No existing key — link normally
   db.linkKey(key, req.discordId);
   promoteUser(req.discordId, 'customer');
   addLinkedKeyToCF(req.discordId, key);
 
-  res.json({ success: true });
+  res.json({ success: true, stacked: false });
 });
 
 // ── API: mod check ────────────────────────────────────────────────────────────
