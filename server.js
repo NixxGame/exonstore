@@ -598,7 +598,7 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return res.json({ valid: false, reason: 'No active key found for this account' });
   }
 
-  // Load all CF entries and sort by purchase date — keys run sequentially
+  // Load all CF entries, sort by purchase date (oldest first = first to run)
   const cfEntries = [];
   for (const k of userKeys) {
     const cf = await cfRead(k.key_value);
@@ -606,20 +606,32 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   }
   cfEntries.sort((a, b) => (a.cf.purchased_at ?? 0) - (b.cf.purchased_at ?? 0));
 
-  // Find the current active key — first one with time remaining, or first unactivated
-  // Only ONE key should be ticking at a time; queued keys stay unactivated until current expires
+  // ── Dual verification ─────────────────────────────────────────────────────
+  // Any key already bound to a DIFFERENT hwid = reject immediately (no transfer)
+  for (const { cf } of cfEntries) {
+    if (cf.hwid && cf.hwid !== hwid) {
+      return res.json({ valid: false, reason: 'HWID mismatch — this account is bound to a different machine. Reset your HWID on exoncheats.com if you changed PCs.' });
+    }
+  }
+
+  // ── Bind HWID to ALL keys immediately (lock against transfer before activation) ──
+  for (const entry of cfEntries) {
+    if (!entry.cf.hwid) {
+      entry.cf.hwid = hwid;
+      await cfWrite(entry.k.key_value, entry.cf);
+      console.log(`HWID locked on queued key ${entry.k.key_value} for ${discord_id}`);
+    }
+  }
+
+  // ── Find and start the current key (first with time remaining, else first queued) ──
   let currentEntry = null;
   for (const entry of cfEntries) {
     const { cf } = entry;
-    if (cf.hwid && cf.hwid !== hwid) {
-      return res.json({ valid: false, reason: 'HWID mismatch — reset your HWID on exoncheats.com if you changed PCs' });
-    }
     if (cf.time_created && cf.length) {
       const expiresAt = cf.time_created + cf.length * 60 * 1000;
-      if (Date.now() < expiresAt) { currentEntry = entry; break; } // still has time
-      // expired — skip, move to next
-    } else {
-      currentEntry = entry; break; // unactivated — this is next in queue
+      if (Date.now() < expiresAt) { currentEntry = entry; break; } // still ticking
+    } else if (!cf.time_created) {
+      currentEntry = entry; break; // next in queue — start it
     }
   }
 
@@ -627,19 +639,16 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return res.json({ valid: false, reason: 'All keys have expired' });
   }
 
-  // Activate current key if not yet started
-  if (!currentEntry.cf.hwid) {
-    currentEntry.cf.hwid         = hwid;
+  // Start the clock on current key if not already running
+  if (!currentEntry.cf.time_created) {
     currentEntry.cf.time_created = Date.now();
     await cfWrite(currentEntry.k.key_value, currentEntry.cf);
-    console.log(`Key ${currentEntry.k.key_value} activated (sequential) for ${discord_id}`);
+    console.log(`Key ${currentEntry.k.key_value} timer started for ${discord_id}`);
   }
 
-  // Combined time = current key remaining + all queued keys' full durations
+  // Combined time = current remaining + all queued keys' full durations
   let combinedMs = 0;
-  let isCurrent  = true;
   for (const { cf } of cfEntries) {
-    if (isCurrent && cf.key === currentEntry.cf.key) isCurrent = false;
     if (cf.time_created && cf.length) {
       const remaining = (cf.time_created + cf.length * 60 * 1000) - Date.now();
       if (remaining > 0) combinedMs += remaining;
@@ -647,6 +656,8 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
       combinedMs += cf.length * 60 * 1000;
     }
   }
+
+  console.log(`Loader verify OK for ${discord_id} — ${combinedMs / 60000 | 0}m combined remaining`);
 
   return res.json({
     valid:         true,
