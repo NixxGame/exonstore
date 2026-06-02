@@ -116,7 +116,10 @@ async function toggleKeyDetails(keyValue) {
     const purchased  = data.purchased_at  ? new Date(data.purchased_at).toLocaleString()  : '—';
     const activated  = data.activated_at  ? new Date(data.activated_at).toLocaleString()  : 'Not yet';
     const expires    = data.expires_at    ? new Date(data.expires_at).toLocaleString()    : 'Never';
-    const timeLeft   = data.expires_at && !data.expired ? formatTimeLeft(data.expires_at) : (data.expired ? 'Expired' : '∞');
+    const timeLeft   = data.expired ? 'Expired'
+                     : data.expires_at ? formatTimeLeft(data.expires_at)
+                     : data.activated_at ? '∞'
+                     : formatMinutes(data.length); // not yet activated — show full plan duration
     const hwid       = data.hwid ?? 'Not activated yet';
 
     el.innerHTML = `
@@ -140,6 +143,15 @@ function formatTimeLeft(expiresAt) {
   if (days > 0)  return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
+}
+
+function formatMinutes(minutes) {
+  if (!minutes) return '∞';
+  const days = Math.floor(minutes / 1440);
+  if (days >= 1) return `${days}d`;
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 1) return `${hours}h`;
+  return `${minutes}m`;
 }
 
 function toggleProfileCard() {

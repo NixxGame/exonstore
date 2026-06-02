@@ -458,6 +458,7 @@ app.get('/api/key/:keyValue', requireAuth, async (req, res) => {
     activated_at:  activatedAt,
     expires_at:    expiresAt,
     expired:       expiresAt ? Date.now() > expiresAt : false,
+    length:        length, // plan duration in minutes, for pre-activation display
   });
 });
 
