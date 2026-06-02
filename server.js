@@ -800,35 +800,45 @@ app.get('/api/check/:discordId', requireAuth, (req, res) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-async function syncLinkedKeysToCF() {
-  console.log('Syncing linked_keys to CF...');
-  const allKeys  = Object.values(require('./db').constructor ? db : db);
-  // Get all users from local DB
-  const data     = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
-  const users    = Object.values(data.users ?? {});
-  const keys     = Object.values(data.keys  ?? {});
+async function cfListAllKeys() {
+  if (!cfReady()) return [];
+  const results = [];
+  let cursor = null;
+  do {
+    const url = `${cfBase()}/keys?limit=1000${cursor ? `&cursor=${cursor}` : ''}`;
+    try {
+      const res  = await axios.get(url, { headers: cfHeaders() });
+      const body = res.data;
+      results.push(...(body.result ?? []).map(k => k.name));
+      cursor = body.result_info?.cursor ?? null;
+    } catch { break; }
+  } while (cursor);
+  return results;
+}
 
-  for (const user of users) {
-    const userLinkedKeys = keys.filter(k => k.discord_id === user.discord_id).map(k => k.key_value);
-    if (!userLinkedKeys.length) continue;
+async function restoreAllFromCF() {
+  console.log('Restoring keys from CF...');
+  const allCFKeys = await cfListAllKeys();
+  const keyNames  = allCFKeys.filter(k => !k.startsWith('user:'));
+  let restored = 0;
 
-    const cfUser = await cfRead(`user:${user.discord_id}`);
-    const cfLinked = cfUser?.linked_keys ?? [];
-    const missing = userLinkedKeys.filter(k => !cfLinked.includes(k));
+  await Promise.all(keyNames.map(async kv => {
+    if (db.getKey(kv)) return; // already in local DB
+    const cf = await cfRead(kv);
+    if (!cf || !cf.discord_id) return;
+    db.insertKey(kv, cf.plan ?? null, null, null);
+    db.linkKey(kv, cf.discord_id);
+    if (cf.active || cf.time_created) db.activateKey(kv);
+    restored++;
+  }));
 
-    if (missing.length) {
-      const updated = { ...(cfUser ?? user), linked_keys: [...cfLinked, ...missing] };
-      await cfWrite(`user:${user.discord_id}`, updated);
-      console.log(`Synced ${missing.length} key(s) to CF for ${user.discord_id}`);
-    }
-  }
-  console.log('CF sync complete.');
+  console.log(`CF restore complete — ${restored} key(s) restored.`);
 }
 
 const PORT = process.env.PORT ?? 3000;
 app.listen(PORT, () => {
   console.log(`Exon server running → http://localhost:${PORT}`);
-  if (cfReady()) syncLinkedKeysToCF().catch(err => console.error('CF sync error:', err.message));
+  if (cfReady()) restoreAllFromCF().catch(err => console.error('CF restore error:', err.message));
   try {
     console.log('Loading bot module...');
     const { startBot } = require('./bot');
