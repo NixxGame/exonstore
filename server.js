@@ -473,7 +473,8 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   if (incoming.discord_id)  return res.status(409).json({ error: 'Key is already linked to an account' });
   if (!incoming.active)     return res.status(410).json({ error: 'Key is no longer active' });
 
-  const user = db.getUser(req.discordId);
+  let user = db.getUser(req.discordId);
+  if (!user) user = await restoreUserFromCF(req.discordId);
   if (!user) return res.status(404).json({ error: 'User record not found — please log in first' });
 
   // ── Stacking: find existing active key for this user ─────────────────────
