@@ -90,10 +90,10 @@ function generateKey() {
 function planToMinutes(plan) {
   if (!plan) return null;
   const p = plan.toLowerCase();
-  if (p.includes('3 month')) return 129600;
-  if (p.includes('month'))   return 43200;
-  if (p.includes('week'))    return 10080;
-  if (p.includes('day'))     return 1440;
+  if (p.includes('3 month')) return 129600; // 90 days
+  if (p.includes('month'))   return 43200;  // 30 days
+  if (p.includes('week'))    return 10080;  // 7 days
+  if (p.includes('day'))     return 1440;   // 1 day
   return null;
 }
 
@@ -285,7 +285,17 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const email   = session.customer_details?.email ?? session.customer_email;
-    const plan    = session.metadata?.plan ?? null;
+
+    // Fetch line items to get the product name for plan detection
+    let plan = session.metadata?.plan ?? null;
+    try {
+      const items = await stripeClient.checkout.sessions.listLineItems(session.id, { limit: 1 });
+      const productName = items.data[0]?.description ?? items.data[0]?.price?.nickname ?? '';
+      if (productName) plan = productName;
+    } catch (err) {
+      console.error('Line items fetch error:', err.message);
+    }
+    console.log(`Plan detected: "${plan}"`);
 
     const key = generateKey();
     db.insertKey(key, plan, session.id, email);
