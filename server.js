@@ -664,26 +664,16 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return res.status(400).json({ valid: false, reason: 'discord_id and hwid required' });
   }
 
-  // Always read from CF as source of truth — local DB may be empty after server restart
-  const cfUser = await cfRead(`user:${discord_id}`);
-  const linkedKeys = cfUser?.linked_keys ?? [];
+  // Scan db.json directly for all keys belonging to this discord_id
+  const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+  const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === discord_id);
 
-  // Fall back to local DB if CF user record has no linked_keys
-  if (!linkedKeys.length) {
-    const dbKeys = db.getUserKeys(discord_id);
-    if (!dbKeys.length) return res.json({ valid: false, reason: 'No active key found for this account' });
-    linkedKeys.push(...dbKeys.map(k => k.key_value));
-    // Write back to CF so future restarts don't need this fallback
-    if (cfUser) {
-      cfUser.linked_keys = linkedKeys;
-      cfWrite(`user:${discord_id}`, cfUser).catch(() => {});
-    } else {
-      addLinkedKeyToCF(discord_id, linkedKeys[0]).catch(() => {});
-    }
+  if (!userKeys.length) {
+    return res.json({ valid: false, reason: 'No active key found for this account' });
   }
 
-  // Load all CF key entries in parallel
-  const cfResults = await Promise.all(linkedKeys.map(kv => cfRead(kv).then(cf => cf ? { kv, cf } : null)));
+  // Load CF entries in parallel for expiry/hwid data
+  const cfResults = await Promise.all(userKeys.map(k => cfRead(k.key_value).then(cf => cf ? { k, cf } : null)));
   const cfEntries = cfResults.filter(Boolean);
 
   if (!cfEntries.length) {
@@ -691,9 +681,6 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   }
 
   cfEntries.sort((a, b) => (a.cf.purchased_at ?? 0) - (b.cf.purchased_at ?? 0));
-
-  // Alias so the rest of the function works unchanged
-  cfEntries.forEach(e => { if (!e.k) e.k = { key_value: e.kv }; });
 
   // ── Dual verification ─────────────────────────────────────────────────────
   // Any key already bound to a DIFFERENT hwid = reject immediately (no transfer)
