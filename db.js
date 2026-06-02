@@ -37,6 +37,9 @@ module.exports = {
   getKey(keyValue) {
     return readDB().keys[keyValue] ?? null;
   },
+  getKeyBySession(sessionId) {
+    return Object.values(readDB().keys).find(k => k.stripe_session_id === sessionId) ?? null;
+  },
   insertKey(keyValue, plan, sessionId, email) {
     const data = readDB();
     if (!data.keys[keyValue]) {

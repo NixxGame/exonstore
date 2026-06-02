@@ -115,7 +115,7 @@ async function toggleKeyDetails(keyValue) {
 
     const purchased  = data.purchased_at  ? new Date(data.purchased_at).toLocaleString()  : '—';
     const activated  = data.activated_at  ? new Date(data.activated_at).toLocaleString()  : 'Not yet';
-    const expires    = data.expires_at    ? new Date(data.expires_at).toLocaleString()    : 'Never';
+    const expires    = data.expires_at    ? new Date(data.expires_at).toLocaleString()    : (data.activated_at ? 'Never' : 'Not Redeemed');
     const timeLeft   = data.expired ? 'Expired'
                      : data.expires_at ? formatTimeLeft(data.expires_at)
                      : data.activated_at ? '∞'

@@ -316,19 +316,28 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   }
 
   const stripeClient = event.livemode ? stripe : stripeTest;
-  console.log(`Webhook: ${event.type} [${event.livemode ? 'live' : 'test'}]`);
+  console.log(`Webhook: ${event.type} [${event.livemode ? 'live' : 'test'}] id=${event.id}`);
+
+  // Respond immediately so Stripe doesn't retry due to timeout
+  res.json({ received: true });
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
 
     if (session.payment_status !== 'paid') {
-      console.log(`Skipping — payment_status is "${session.payment_status}", not paid`);
-      return res.json({ received: true });
+      console.log(`Skipping — payment_status is "${session.payment_status}"`);
+      return;
+    }
+
+    // Idempotency — one key per session, no matter how many times Stripe delivers it
+    if (db.getKeyBySession(session.id)) {
+      console.log(`Session ${session.id} already processed — skipping`);
+      return;
     }
 
     const email = session.customer_details?.email ?? session.customer_email;
 
-    // Fetch line items to get the product name for plan detection
+    // Detect plan from line items
     let plan = session.metadata?.plan ?? null;
     try {
       const items = await stripeClient.checkout.sessions.listLineItems(session.id, { limit: 1 });
@@ -337,7 +346,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     } catch (err) {
       console.error('Line items fetch error:', err.message);
     }
-    console.log(`Plan detected: "${plan}"`);
+    console.log(`Plan detected: "${plan}" for session ${session.id}`);
 
     const key = generateKey();
     db.insertKey(key, plan, session.id, email);
@@ -352,8 +361,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       }
     }
   }
-
-  res.json({ received: true });
 });
 
 app.use(express.static(path.join(__dirname)));
