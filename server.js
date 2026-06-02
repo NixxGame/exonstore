@@ -185,6 +185,8 @@ async function restoreKeysFromCF(discordId, linkedKeys = []) {
     if (!db.getKey(keyValue)) {
       db.insertKey(keyValue, entry.plan ?? null, null, null);
       db.linkKey(keyValue, discordId);
+      // Keys in linked_keys are already claimed — mark active
+      if (entry.active) db.activateKey(keyValue);
     }
   }
 }
@@ -596,9 +598,10 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   if (!key) return res.status(400).json({ error: 'Key is required' });
 
   const incoming = db.getKey(key);
-  if (!incoming)            return res.status(404).json({ error: 'Key not found' });
-  if (incoming.discord_id)  return res.status(409).json({ error: 'Key is already linked to an account' });
-  if (!incoming.active)     return res.status(410).json({ error: 'Key is no longer active' });
+  if (!incoming)                                    return res.status(404).json({ error: 'Key not found' });
+  if (incoming.discord_id)                          return res.status(409).json({ error: 'Key is already linked to an account' });
+  // Only block keys that were previously active and then explicitly deactivated (discord_id would be set)
+  // New unlinked keys have active: false + discord_id: null — those are fine to link
 
   let user = db.getUser(req.discordId);
   if (!user) user = await restoreUserFromCF(req.discordId);
