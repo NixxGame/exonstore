@@ -15,7 +15,10 @@ const cors    = require('cors');
 const path    = require('path');
 const axios   = require('axios');
 const jwt     = require('jsonwebtoken');
-const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe     = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripeTest = process.env.STRIPE_SECRET_KEY_TEST
+  ? require('stripe')(process.env.STRIPE_SECRET_KEY_TEST)
+  : stripe;
 const db      = require('./db');
 
 // ── Role helpers ──────────────────────────────────────────────────────────────
@@ -241,12 +244,28 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   const sig = req.headers['stripe-signature'];
   let event;
 
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Stripe signature error:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+  const secrets = [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_WEBHOOK_SECRET_TEST,
+  ].filter(Boolean);
+
+  let lastErr;
+  for (const secret of secrets) {
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, secret);
+      break;
+    } catch (err) {
+      lastErr = err;
+    }
   }
+
+  if (!event) {
+    console.error('Stripe signature error:', lastErr.message);
+    return res.status(400).send(`Webhook Error: ${lastErr.message}`);
+  }
+
+  const stripeClient = event.livemode ? stripe : stripeTest;
+  console.log(`Webhook: ${event.type} [${event.livemode ? 'live' : 'test'}]`);
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
