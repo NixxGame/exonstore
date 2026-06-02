@@ -284,7 +284,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    const email   = session.customer_details?.email ?? session.customer_email;
+
+    if (session.payment_status !== 'paid') {
+      console.log(`Skipping — payment_status is "${session.payment_status}", not paid`);
+      return res.json({ received: true });
+    }
+
+    const email = session.customer_details?.email ?? session.customer_email;
 
     // Fetch line items to get the product name for plan detection
     let plan = session.metadata?.plan ?? null;
