@@ -24,12 +24,14 @@ async function fetchProfile(token) {
     const res = await fetch(`${API}/api/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) { signOut(); return; }
+    // Only sign out on auth errors, not server errors
+    if (res.status === 401) { signOut(); return; }
+    if (!res.ok) return; // server restarting — stay logged in, retry later
     const user = await res.json();
     renderNav(user);
     renderProfileCard(user);
   } catch {
-    // server offline during dev — ignore
+    // network error — stay logged in
   }
 }
 

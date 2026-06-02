@@ -28,6 +28,7 @@ function promoteUser(discordId, targetRole) {
   if (ROLE_ORDER.indexOf(user.role) < ROLE_ORDER.indexOf(targetRole)) {
     db.setUserRole(discordId, targetRole);
     assignDiscordRole(discordId, `DISCORD_ROLE_${targetRole.toUpperCase()}`);
+    writeUserToCF({ ...user, role: targetRole });
   }
 }
 
@@ -93,29 +94,71 @@ function planToMinutes(plan) {
   return null;
 }
 
-async function writeKeyToCF(key, discordId, plan) {
-  const accountId  = process.env.CF_ACCOUNT_ID;
-  const namespaceId = process.env.CF_KV_NAMESPACE_ID;
-  const apiToken   = process.env.CF_API_TOKEN;
-  if (!accountId || !namespaceId || !apiToken) return;
+function cfHeaders() {
+  return { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, 'Content-Type': 'text/plain' };
+}
 
-  const value = JSON.stringify({
+function cfBase() {
+  return `https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CF_KV_NAMESPACE_ID}`;
+}
+
+function cfReady() {
+  return !!(process.env.CF_ACCOUNT_ID && process.env.CF_KV_NAMESPACE_ID && process.env.CF_API_TOKEN);
+}
+
+async function cfWrite(kvKey, data) {
+  if (!cfReady()) return;
+  try {
+    await axios.put(
+      `${cfBase()}/values/${encodeURIComponent(kvKey)}`,
+      JSON.stringify(data),
+      { headers: cfHeaders() }
+    );
+  } catch (err) {
+    console.error('CF KV write error:', err.response?.data ?? err.message);
+  }
+}
+
+async function cfRead(kvKey) {
+  if (!cfReady()) return null;
+  try {
+    const res = await axios.get(
+      `${cfBase()}/values/${encodeURIComponent(kvKey)}`,
+      { headers: cfHeaders() }
+    );
+    return typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+  } catch {
+    return null;
+  }
+}
+
+async function writeKeyToCF(key, discordId, plan) {
+  await cfWrite(key, {
     key,
     discord_id:   discordId ?? null,
     hwid:         null,
     time_created: Date.now(),
     length:       planToMinutes(plan),
+    active:       true,
   });
+}
 
-  try {
-    await axios.put(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`,
-      value,
-      { headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'text/plain' } }
-    );
-  } catch (err) {
-    console.error('CF KV write error:', err.response?.data ?? err.message);
-  }
+async function writeUserToCF(user) {
+  await cfWrite(`user:${user.discord_id}`, user);
+}
+
+async function restoreUserFromCF(discordId) {
+  const user = await cfRead(`user:${discordId}`);
+  if (!user) return null;
+  db.upsertUser(user.discord_id, user.username, user.avatar);
+  if (user.role && user.role !== 'member') db.setUserRole(user.discord_id, user.role);
+  return db.getUser(discordId);
+}
+
+async function restoreKeysFromCF(discordId) {
+  // Keys linked to this user are tracked in db locally — nothing to restore
+  // since keys are written to CF KV on creation but linking is stored locally
+  // We'll rely on the user re-linking after a server restart for now
 }
 
 // ── Email (Resend) ────────────────────────────────────────────────────────────
@@ -268,6 +311,7 @@ app.get('/auth/discord/callback', async (req, res) => {
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(id) % 6n)}.png`;
 
     db.upsertUser(id, username, avatarUrl);
+    writeUserToCF(db.getUser(id));
 
     // Auto-join Discord server
     const guildId  = process.env.DISCORD_GUILD_ID;
@@ -323,7 +367,10 @@ async function getHighestDiscordRole(discordId) {
 }
 
 app.get('/api/me', requireAuth, async (req, res) => {
-  const user = db.getUser(req.discordId);
+  let user = db.getUser(req.discordId);
+
+  // Server restarted and wiped local db — restore from CF KV
+  if (!user) user = await restoreUserFromCF(req.discordId);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const keys = db.getUserKeys(req.discordId);
 
