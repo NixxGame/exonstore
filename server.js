@@ -173,39 +173,18 @@ async function restoreUserFromCF(discordId) {
 }
 
 async function restoreKeysFromCF(discordId, linkedKeys = []) {
-  const validKeys = [];
   for (const keyValue of linkedKeys) {
     const entry = await cfRead(keyValue);
 
-    // Key was manually deleted from CF — remove from user's linked list
+    // Can't read from CF right now — skip but don't remove
     if (!entry) {
-      console.log(`Key ${keyValue} not found in CF — skipping restore`);
+      console.log(`Key ${keyValue} not readable from CF — skipping restore (not removing)`);
       continue;
-    }
-
-    // Key expired — deactivate locally and skip
-    if (entry.time_created && entry.length) {
-      const expiresAt = entry.time_created + entry.length * 60 * 1000;
-      if (Date.now() > expiresAt) {
-        db.deactivateKey(keyValue);
-        console.log(`Key ${keyValue} expired — deactivated`);
-        continue;
-      }
     }
 
     if (!db.getKey(keyValue)) {
       db.insertKey(keyValue, entry.plan ?? null, null, null);
       db.linkKey(keyValue, discordId);
-    }
-    validKeys.push(keyValue);
-  }
-
-  // Prune deleted/expired keys from the user's CF linked_keys list
-  if (validKeys.length !== linkedKeys.length) {
-    const cfUser = await cfRead(`user:${discordId}`);
-    if (cfUser) {
-      cfUser.linked_keys = validKeys;
-      await cfWrite(`user:${discordId}`, cfUser);
     }
   }
 }
@@ -484,41 +463,54 @@ app.get('/api/me', requireAuth, async (req, res) => {
   if (!user) user = await restoreUserFromCF(req.discordId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Audit existing keys — remove expired or CF-deleted ones
+  // Audit: only remove keys that are confirmed deleted from CF (not just unreadable)
   const rawKeys = db.getUserKeys(req.discordId);
   for (const k of rawKeys) {
     const cf = await cfRead(k.key_value);
-    if (!cf) {
-      db.removeLinkedKey(req.discordId, k.key_value);
-      removeLinkedKeyFromCF(req.discordId, k.key_value);
-      console.log(`Key ${k.key_value} deleted from CF — removed from user ${req.discordId}`);
-      continue;
-    }
-    if (cf.time_created && cf.length) {
-      const expiresAt = cf.time_created + cf.length * 60 * 1000;
-      if (Date.now() > expiresAt) {
-        db.removeLinkedKey(req.discordId, k.key_value);
+    if (cf === null) {
+      // Confirm it's really gone with a second read before removing
+      const confirm = await cfRead(k.key_value);
+      if (confirm === null) {
+        db.deactivateKey(k.key_value);
         removeLinkedKeyFromCF(req.discordId, k.key_value);
-        console.log(`Key ${k.key_value} expired — removed from user ${req.discordId}`);
+        console.log(`Key ${k.key_value} confirmed deleted from CF — deactivated`);
       }
     }
   }
 
   const keys = db.getUserKeys(req.discordId);
 
-  // Calculate combined time remaining across all keys
-  let combinedMs = 0;
+  // Calculate combined time remaining across all keys (sequential — one ticks at a time)
+  let combinedMs   = 0;
   let anyActivated = false;
-  for (const k of keys) {
+  let currentFound = false;
+
+  // Sort by purchase date for sequential ordering
+  const sortedKeys = [...keys];
+  const cfMap = {};
+  for (const k of sortedKeys) {
     const cf = await cfRead(k.key_value);
+    if (cf) cfMap[k.key_value] = cf;
+  }
+  sortedKeys.sort((a, b) => (cfMap[a.key_value]?.purchased_at ?? 0) - (cfMap[b.key_value]?.purchased_at ?? 0));
+
+  for (const k of sortedKeys) {
+    const cf = cfMap[k.key_value];
     if (!cf) continue;
     if (cf.time_created && cf.length) {
       anyActivated = true;
       const remaining = (cf.time_created + cf.length * 60 * 1000) - Date.now();
-      if (remaining > 0) combinedMs += remaining;
+      if (remaining > 0) {
+        combinedMs += remaining;
+        if (!currentFound) { k.queue_status = 'active'; currentFound = true; }
+        else k.queue_status = 'queued';
+      } else {
+        k.queue_status = 'expired';
+      }
     } else if (cf.length) {
-      // Not yet activated — count full duration
       combinedMs += cf.length * 60 * 1000;
+      if (!currentFound) { k.queue_status = 'active'; currentFound = true; }
+      else k.queue_status = 'queued';
     }
   }
 
@@ -606,58 +598,60 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return res.json({ valid: false, reason: 'No active key found for this account' });
   }
 
-  // Find which key to activate/use (first unactivated, or first with time remaining)
-  let primaryKey = null;
-  let primaryCF  = null;
-
+  // Load all CF entries and sort by purchase date — keys run sequentially
+  const cfEntries = [];
   for (const k of userKeys) {
     const cf = await cfRead(k.key_value);
-    if (!cf) continue;
+    if (cf) cfEntries.push({ k, cf });
+  }
+  cfEntries.sort((a, b) => (a.cf.purchased_at ?? 0) - (b.cf.purchased_at ?? 0));
 
-    // Skip expired keys
+  // Find the current active key — first one with time remaining, or first unactivated
+  // Only ONE key should be ticking at a time; queued keys stay unactivated until current expires
+  let currentEntry = null;
+  for (const entry of cfEntries) {
+    const { cf } = entry;
+    if (cf.hwid && cf.hwid !== hwid) {
+      return res.json({ valid: false, reason: 'HWID mismatch — reset your HWID on exoncheats.com if you changed PCs' });
+    }
     if (cf.time_created && cf.length) {
       const expiresAt = cf.time_created + cf.length * 60 * 1000;
-      if (Date.now() > expiresAt) continue;
+      if (Date.now() < expiresAt) { currentEntry = entry; break; } // still has time
+      // expired — skip, move to next
+    } else {
+      currentEntry = entry; break; // unactivated — this is next in queue
     }
-
-    // HWID check — must match this machine or be unbound
-    if (cf.hwid && cf.hwid !== hwid) continue;
-
-    primaryKey = k;
-    primaryCF  = cf;
-    break;
   }
 
-  if (!primaryKey) {
-    return res.json({ valid: false, reason: 'HWID mismatch — reset your HWID on exoncheats.com if you changed PCs' });
+  if (!currentEntry) {
+    return res.json({ valid: false, reason: 'All keys have expired' });
   }
 
-  // First activation — bind HWID and start clock on this key
-  if (!primaryCF.hwid) {
-    primaryCF.hwid         = hwid;
-    primaryCF.time_created = Date.now();
-    await cfWrite(primaryKey.key_value, primaryCF);
-    console.log(`Key ${primaryKey.key_value} activated for ${discord_id}`);
+  // Activate current key if not yet started
+  if (!currentEntry.cf.hwid) {
+    currentEntry.cf.hwid         = hwid;
+    currentEntry.cf.time_created = Date.now();
+    await cfWrite(currentEntry.k.key_value, currentEntry.cf);
+    console.log(`Key ${currentEntry.k.key_value} activated (sequential) for ${discord_id}`);
   }
 
-  // Sum total time remaining across ALL keys bound to this HWID
+  // Combined time = current key remaining + all queued keys' full durations
   let combinedMs = 0;
-  for (const k of userKeys) {
-    const cf = await cfRead(k.key_value);
-    if (!cf) continue;
-    if (cf.hwid && cf.hwid !== hwid) continue; // different machine
+  let isCurrent  = true;
+  for (const { cf } of cfEntries) {
+    if (isCurrent && cf.key === currentEntry.cf.key) isCurrent = false;
     if (cf.time_created && cf.length) {
       const remaining = (cf.time_created + cf.length * 60 * 1000) - Date.now();
       if (remaining > 0) combinedMs += remaining;
-    } else if (cf.length && !cf.hwid) {
-      combinedMs += cf.length * 60 * 1000; // unactivated keys add full duration
+    } else if (cf.length && !cf.time_created) {
+      combinedMs += cf.length * 60 * 1000;
     }
   }
 
   return res.json({
-    valid:           true,
-    expires_in_ms:   combinedMs,
-    expires_at:      combinedMs > 0 ? Date.now() + combinedMs : null,
+    valid:         true,
+    expires_in_ms: combinedMs,
+    expires_at:    combinedMs > 0 ? Date.now() + combinedMs : null,
   });
 });
 

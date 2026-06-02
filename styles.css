@@ -1136,7 +1136,20 @@ footer {
   text-transform: uppercase;
   color: var(--orange);
   margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.key-queue-badge {
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.key-queue-badge.active { background: rgba(74,222,128,.15); color: #4ade80; border: 1px solid rgba(74,222,128,.3); }
+.key-queue-badge.queued { background: rgba(255,255,255,.06); color: var(--text-dim); border: 1px solid var(--border); }
 .key-hwid-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .key-not-activated { font-size: .7rem; color: var(--text-dim); font-style: italic; }
 .key-hwid { font-family: 'Courier New', Courier, monospace; font-size: .68rem; color: var(--text-dim); word-break: break-all; }

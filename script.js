@@ -130,9 +130,13 @@ async function toggleCombinedDetails(keys) {
         ? `<span class="key-hwid-wrap"><span class="key-hwid">${hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}', this)">Reset</button></span>`
         : `<span class="key-not-activated">Run the loader to activate</span>`;
 
+      const statusBadge = k.queue_status === 'active'  ? `<span class="key-queue-badge active">Active</span>`
+                        : k.queue_status === 'queued' ? `<span class="key-queue-badge queued">Queued</span>`
+                        : '';
+
       html += `
         <div class="key-sub-entry">
-          <div class="key-sub-label">${k.plan ?? 'License'}</div>
+          <div class="key-sub-label">${k.plan ?? 'License'} ${statusBadge}</div>
           <div class="key-detail-row"><span>Purchased</span><span>${purchased}</span></div>
           <div class="key-detail-row"><span>Activated</span><span>${activated}</span></div>
           <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
