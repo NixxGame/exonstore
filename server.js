@@ -403,6 +403,30 @@ app.get('/api/me', requireAuth, async (req, res) => {
   res.json({ ...user, keys });
 });
 
+// ── API: key details ──────────────────────────────────────────────────────────
+
+app.get('/api/key/:keyValue', requireAuth, async (req, res) => {
+  const local = db.getKey(req.params.keyValue);
+  if (!local || local.discord_id !== req.discordId) {
+    return res.status(404).json({ error: 'Key not found' });
+  }
+
+  const cf = await cfRead(req.params.keyValue);
+  const timeCreated = cf?.time_created ?? (local.created_at * 1000);
+  const length      = cf?.length ?? null;
+  const expiresAt   = length ? timeCreated + length * 60 * 1000 : null;
+
+  res.json({
+    key_value:    local.key_value,
+    plan:         local.plan ?? 'License',
+    active:       local.active,
+    hwid:         cf?.hwid ?? null,
+    time_created: timeCreated,
+    expires_at:   expiresAt,
+    expired:      expiresAt ? Date.now() > expiresAt : false,
+  });
+});
+
 // ── API: link key ─────────────────────────────────────────────────────────────
 
 app.post('/api/link-key', requireAuth, express.json(), (req, res) => {

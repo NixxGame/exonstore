@@ -76,14 +76,68 @@ function renderProfileCard(user) {
       const div = document.createElement('div');
       div.className = 'profile-key-item';
       div.innerHTML = `
-        <span class="profile-key-value">${k.key_value}</span>
-        <span class="profile-key-plan">${k.plan ?? 'License'}</span>
+        <div class="profile-key-header">
+          <span class="profile-key-value">${k.key_value}</span>
+          <span class="profile-key-plan">${k.plan ?? 'License'}</span>
+        </div>
+        <div class="profile-key-details" id="kd-${k.key_value}">
+          <div class="key-detail-loading">Loading...</div>
+        </div>
       `;
+      div.querySelector('.profile-key-header').addEventListener('click', () => toggleKeyDetails(k.key_value));
       keysEl.appendChild(div);
     });
   } else {
     keysEl.innerHTML = '<div class="profile-no-keys">No keys linked yet.</div>';
   }
+}
+
+async function toggleKeyDetails(keyValue) {
+  const el = document.getElementById(`kd-${keyValue}`);
+  const isOpen = el.classList.contains('open');
+
+  // Close all
+  document.querySelectorAll('.profile-key-details').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.profile-key-item').forEach(d => d.classList.remove('expanded'));
+
+  if (isOpen) return;
+
+  el.classList.add('open');
+  el.closest('.profile-key-item').classList.add('expanded');
+
+  const token = localStorage.getItem('exon_token');
+  try {
+    const res  = await fetch(`${API}/api/key/${encodeURIComponent(keyValue)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) { el.innerHTML = `<div class="key-detail-err">${data.error}</div>`; return; }
+
+    const created  = data.time_created ? new Date(data.time_created).toLocaleString() : '—';
+    const expires  = data.expires_at   ? new Date(data.expires_at).toLocaleString()   : 'Never';
+    const timeLeft = data.expires_at && !data.expired ? formatTimeLeft(data.expires_at) : (data.expired ? 'Expired' : '∞');
+    const hwid     = data.hwid ?? 'Not activated yet';
+
+    el.innerHTML = `
+      <div class="key-detail-row"><span>Created</span><span>${created}</span></div>
+      <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
+      <div class="key-detail-row"><span>Time Left</span><span class="${data.expired ? 'key-expired' : 'key-active'}">${timeLeft}</span></div>
+      <div class="key-detail-row hwid-row"><span>HWID</span><span class="key-hwid">${hwid}</span></div>
+    `;
+  } catch {
+    el.innerHTML = '<div class="key-detail-err">Could not load details.</div>';
+  }
+}
+
+function formatTimeLeft(expiresAt) {
+  const ms   = expiresAt - Date.now();
+  if (ms <= 0) return 'Expired';
+  const days  = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  const mins  = Math.floor((ms % 3600000)  / 60000);
+  if (days > 0)  return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
 function toggleProfileCard() {
