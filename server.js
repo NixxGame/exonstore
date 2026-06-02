@@ -606,7 +606,7 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   db.linkKey(key, req.discordId);
   db.activateKey(key);
   promoteUser(req.discordId, 'customer');
-  addLinkedKeyToCF(req.discordId, key);
+  await addLinkedKeyToCF(req.discordId, key);
 
   // Activate in CF KV too
   const cf = await cfRead(key);
@@ -659,21 +659,29 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return res.status(400).json({ valid: false, reason: 'discord_id and hwid required' });
   }
 
-  let userKeys = db.getUserKeys(discord_id);
+  // Always read from CF as source of truth — local DB may be empty after server restart
+  const cfUser = await cfRead(`user:${discord_id}`);
+  const linkedKeys = cfUser?.linked_keys ?? [];
 
-  // If not in local DB, try restoring from CF first
-  if (!userKeys.length) {
-    await restoreUserFromCF(discord_id);
-    userKeys = db.getUserKeys(discord_id);
+  // Fall back to local DB if CF user record has no linked_keys
+  if (!linkedKeys.length) {
+    const dbKeys = db.getUserKeys(discord_id);
+    if (!dbKeys.length) return res.json({ valid: false, reason: 'No active key found for this account' });
+    linkedKeys.push(...dbKeys.map(k => k.key_value));
   }
-  if (!userKeys.length) {
+
+  // Load all CF key entries in parallel
+  const cfResults = await Promise.all(linkedKeys.map(kv => cfRead(kv).then(cf => cf ? { kv, cf } : null)));
+  const cfEntries = cfResults.filter(Boolean);
+
+  if (!cfEntries.length) {
     return res.json({ valid: false, reason: 'No active key found for this account' });
   }
 
-  // Load all CF entries in parallel, sort by purchase date (oldest first = first to run)
-  const cfResults = await Promise.all(userKeys.map(k => cfRead(k.key_value).then(cf => cf ? { k, cf } : null)));
-  const cfEntries = cfResults.filter(Boolean);
   cfEntries.sort((a, b) => (a.cf.purchased_at ?? 0) - (b.cf.purchased_at ?? 0));
+
+  // Alias so the rest of the function works unchanged
+  cfEntries.forEach(e => { if (!e.k) e.k = { key_value: e.kv }; });
 
   // ── Dual verification ─────────────────────────────────────────────────────
   // Any key already bound to a DIFFERENT hwid = reject immediately (no transfer)
