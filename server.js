@@ -488,6 +488,9 @@ const DISCORD_ROLE_MAP = () => [
 ];
 
 async function getHighestDiscordRole(discordId) {
+  // Owner always gets developer
+  if (discordId === process.env.OWNER_DISCORD_ID) return 'developer';
+
   const guildId  = process.env.DISCORD_GUILD_ID;
   const botToken = process.env.DISCORD_BOT_TOKEN;
   if (!guildId || !botToken) return null;
@@ -498,11 +501,16 @@ async function getHighestDiscordRole(discordId) {
       { headers: { Authorization: `Bot ${botToken}` } }
     );
     const memberRoles = res.data.roles ?? [];
+    console.log(`[roles] ${discordId} has: ${memberRoles.join(', ')}`);
     for (const { name, id } of DISCORD_ROLE_MAP()) {
-      if (id && memberRoles.includes(id)) return name;
+      if (id && memberRoles.includes(id)) {
+        console.log(`[roles] matched → ${name} (${id})`);
+        return name;
+      }
     }
     return 'member';
-  } catch {
+  } catch (err) {
+    console.error(`[roles] Discord API error for ${discordId}:`, err.response?.status, err.response?.data ?? err.message);
     return null;
   }
 }
@@ -679,9 +687,16 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   // Scan db.json directly for all keys belonging to this discord_id
   const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
   const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === discord_id);
+  const dbUser   = dbData.users?.[discord_id] ?? null;
 
   if (!userKeys.length) {
-    return res.json({ valid: false, reason: 'No active key found for this account' });
+    return res.json({
+      valid:        false,
+      reason:       'No active key found for this account',
+      user_exists:  !!dbUser,
+      username:     dbUser?.username ?? '',
+      role:         dbUser?.role ?? 'member',
+    });
   }
 
   // Load CF entries in parallel for expiry/hwid data
@@ -745,12 +760,31 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     }
   }
 
+  // Always fetch live role from Discord rather than trusting stale DB value
+  console.log(`[verify] discord_id="${discord_id}" owner="${process.env.OWNER_DISCORD_ID}" match=${discord_id === process.env.OWNER_DISCORD_ID}`);
+  let role = (await getHighestDiscordRole(discord_id)) ?? db.getUser(discord_id)?.role ?? 'member';
+  console.log(`[verify] resolved role="${role}" for ${discord_id}`);
+  if (role && db.getUser(discord_id)?.role !== role) db.setUserRole(discord_id, role);
+
+  const keysSummary = cfEntries.map(({ k, cf }) => {
+    let status = 'queued';
+    let expiresMs = cf.length ? cf.length * 60 * 1000 : 0;
+    if (cf.time_created && cf.length) {
+      const rem = cf.time_created + cf.length * 60 * 1000 - Date.now();
+      status    = rem > 0 ? 'active' : 'expired';
+      expiresMs = Math.max(0, rem);
+    }
+    return { key_value: k.key_value, plan: k.plan ?? cf.plan ?? 'License', status, expires_ms: expiresMs };
+  });
+
   console.log(`Loader verify OK for ${discord_id} — ${combinedMs / 60000 | 0}m combined remaining`);
 
   return res.json({
     valid:         true,
     expires_in_ms: combinedMs,
     expires_at:    combinedMs > 0 ? Date.now() + combinedMs : null,
+    role,
+    keys:          keysSummary,
   });
 });
 
