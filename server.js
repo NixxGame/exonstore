@@ -333,15 +333,21 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   // Respond immediately so Stripe doesn't retry due to timeout
   res.json({ received: true });
 
-  if (event.type === 'checkout.session.completed') {
+  // checkout.session.completed  → only process if payment is already confirmed (cards etc.)
+  // checkout.session.async_payment_succeeded → fires when delayed payments (bank etc.) confirm
+  const isCompleted      = event.type === 'checkout.session.completed';
+  const isAsyncConfirmed = event.type === 'checkout.session.async_payment_succeeded';
+
+  if (isCompleted || isAsyncConfirmed) {
     const session = event.data.object;
 
-    if (session.payment_status !== 'paid') {
-      console.log(`Skipping — payment_status is "${session.payment_status}"`);
+    // For completed events, skip if payment isn't confirmed yet — async_payment_succeeded will handle it
+    if (isCompleted && session.payment_status !== 'paid') {
+      console.log(`checkout.session.completed — payment_status="${session.payment_status}", waiting for async confirmation`);
       return;
     }
 
-    // Idempotency — one key per session, no matter how many times Stripe delivers it
+    // Idempotency — one key per session no matter how many events fire
     if (db.getKeyBySession(session.id)) {
       console.log(`Session ${session.id} already processed — skipping`);
       return;
@@ -358,7 +364,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     } catch (err) {
       console.error('Line items fetch error:', err.message);
     }
-    console.log(`Plan detected: "${plan}" for session ${session.id}`);
+    console.log(`Payment confirmed [${event.type}] — plan="${plan}" session=${session.id}`);
 
     const key = generateKey();
     db.insertKey(key, plan, session.id, email);
