@@ -56,9 +56,12 @@ module.exports = {
     if (data.keys[keyValue]) { data.keys[keyValue].discord_id = discordId; writeDB(data); }
   },
   getUserKeys(discordId) {
+    // Returns all keys linked to this user regardless of active flag.
+    // Active flag is unreliable (can be set false by CF read failures).
+    // Expiry is determined by CF KV time_created + length, not this flag.
     return Object.values(readDB().keys)
-      .filter(k => k.discord_id === discordId && k.active)
-      .sort((a, b) => b.created_at - a.created_at);
+      .filter(k => k.discord_id === discordId)
+      .sort((a, b) => a.created_at - b.created_at);
   },
   activateKey(keyValue) {
     const data = readDB();

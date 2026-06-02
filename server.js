@@ -509,21 +509,6 @@ app.get('/api/me', requireAuth, async (req, res) => {
   if (!user) user = await restoreUserFromCF(req.discordId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Audit: only remove keys that are confirmed deleted from CF (not just unreadable)
-  const rawKeys = db.getUserKeys(req.discordId);
-  for (const k of rawKeys) {
-    const cf = await cfRead(k.key_value);
-    if (cf === null) {
-      // Confirm it's really gone with a second read before removing
-      const confirm = await cfRead(k.key_value);
-      if (confirm === null) {
-        db.deactivateKey(k.key_value);
-        removeLinkedKeyFromCF(req.discordId, k.key_value);
-        console.log(`Key ${k.key_value} confirmed deleted from CF — deactivated`);
-      }
-    }
-  }
-
   const keys = db.getUserKeys(req.discordId);
 
   // Calculate combined time remaining across all keys (sequential — one ticks at a time)
