@@ -155,13 +155,28 @@ async function restoreUserFromCF(discordId) {
   if (!user) return null;
   db.upsertUser(user.discord_id, user.username, user.avatar);
   if (user.role && user.role !== 'member') db.setUserRole(user.discord_id, user.role);
+  await restoreKeysFromCF(discordId, user.linked_keys ?? []);
   return db.getUser(discordId);
 }
 
-async function restoreKeysFromCF(discordId) {
-  // Keys linked to this user are tracked in db locally — nothing to restore
-  // since keys are written to CF KV on creation but linking is stored locally
-  // We'll rely on the user re-linking after a server restart for now
+async function restoreKeysFromCF(discordId, linkedKeys = []) {
+  for (const keyValue of linkedKeys) {
+    if (db.getKey(keyValue)) continue; // already in local db
+    const entry = await cfRead(keyValue);
+    if (!entry) continue;
+    db.insertKey(keyValue, entry.plan ?? null, null, null);
+    db.linkKey(keyValue, discordId);
+  }
+}
+
+async function addLinkedKeyToCF(discordId, keyValue) {
+  const user = await cfRead(`user:${discordId}`);
+  if (!user) return;
+  const keys = user.linked_keys ?? [];
+  if (!keys.includes(keyValue)) {
+    user.linked_keys = [...keys, keyValue];
+    await cfWrite(`user:${discordId}`, user);
+  }
 }
 
 // ── Email (Resend) ────────────────────────────────────────────────────────────
@@ -443,6 +458,7 @@ app.post('/api/link-key', requireAuth, express.json(), (req, res) => {
 
   db.linkKey(key, req.discordId);
   promoteUser(req.discordId, 'customer');
+  addLinkedKeyToCF(req.discordId, key);
 
   res.json({ success: true });
 });
