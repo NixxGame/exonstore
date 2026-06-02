@@ -2,7 +2,7 @@
  * Exon External — Stripe Webhook + Email Delivery
  *
  * Setup:
- *   npm install express stripe nodemailer dotenv
+ *   npm install express stripe resend dotenv
  *
  * Create a .env file (see .env.example) then run:
  *   node webhook.js
@@ -16,7 +16,8 @@
 require('dotenv').config();
 const express  = require('express');
 const stripe   = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 
@@ -67,20 +68,7 @@ function generateKey() {
 
 // ── Email ───────────────────────────────────────────────────────────────────
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT ?? '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
 async function sendConfirmationEmail(to, key, session) {
-  const transporter = createTransporter();
 
   const html = `
 <!DOCTYPE html>
@@ -166,13 +154,15 @@ async function sendConfirmationEmail(to, key, session) {
 </body>
 </html>`;
 
-  await transporter.sendMail({
-    from:    `"Exon External" <${process.env.SMTP_FROM}>`,
+  const { error } = await resend.emails.send({
+    from:    `Exon External <${process.env.SMTP_FROM}>`,
     to,
     subject: 'Your Exon External License Key',
     html,
     text: `Your Exon External license key: ${key}\n\nJoin our Discord for setup help: https://discord.gg/NczWT7nyAs`,
   });
+
+  if (error) throw new Error(error.message);
 }
 
 // ── Start ───────────────────────────────────────────────────────────────────
