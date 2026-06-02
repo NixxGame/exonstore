@@ -61,4 +61,11 @@ module.exports = {
     const data = readDB();
     if (data.keys[keyValue]) { data.keys[keyValue].active = false; writeDB(data); }
   },
+  removeLinkedKey(discordId, keyValue) {
+    // Remove from local db entirely
+    const data = readDB();
+    delete data.keys[keyValue];
+    writeDB(data);
+    // Also prune from CF async (fire and forget via server)
+  },
 };
