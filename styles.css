@@ -1124,6 +1124,19 @@ footer {
 }
 .key-active { color: #4ade80 !important; }
 .key-expired { color: #f87171 !important; }
+.key-sub-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.key-sub-entry:last-child { border-bottom: none; }
+.key-sub-label {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 6px;
+}
 .key-hwid-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .key-hwid { font-family: 'Courier New', Courier, monospace; font-size: .68rem; color: var(--text-dim); word-break: break-all; }
 .key-hwid-reset {

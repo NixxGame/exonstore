@@ -68,28 +68,82 @@ function renderProfileCard(user) {
     rolesEl.appendChild(span);
   });
 
-  // Keys
+  // Keys — show one combined license block
   const keysEl = document.getElementById('pc-keys');
   keysEl.innerHTML = '';
+
   if (user.keys && user.keys.length > 0) {
-    user.keys.forEach(k => {
-      const div = document.createElement('div');
-      div.className = 'profile-key-item';
-      div.innerHTML = `
-        <div class="profile-key-header">
-          <span class="profile-key-value">${k.key_value}</span>
-          <span class="profile-key-plan">${k.plan ?? 'License'}</span>
-        </div>
-        <div class="profile-key-details" id="kd-${k.key_value}">
-          <div class="key-detail-loading">Loading...</div>
-        </div>
-      `;
-      div.querySelector('.profile-key-header').addEventListener('click', () => toggleKeyDetails(k.key_value));
-      keysEl.appendChild(div);
-    });
+    const totalMs    = user.combined_ms ?? 0;
+    const activated  = user.combined_activated ?? false;
+    const timeLeft   = totalMs > 0 ? formatTimeLeft(Date.now() + totalMs) : (activated ? 'Expired' : formatMinutes(
+      user.keys.reduce((sum, k) => sum + 0, 0) // placeholder until CF data loads
+    ));
+
+    const div = document.createElement('div');
+    div.className = 'profile-key-item';
+    div.innerHTML = `
+      <div class="profile-key-header" id="combined-key-header">
+        <span class="profile-key-value">Exon External License</span>
+        <span class="profile-key-plan ${totalMs > 0 ? 'key-active' : ''}">${totalMs > 0 ? formatTimeLeft(Date.now() + totalMs) : (activated ? 'Expired' : 'Not Activated')}</span>
+      </div>
+      <div class="profile-key-details" id="kd-combined">
+        <div class="key-detail-loading">Loading...</div>
+      </div>
+    `;
+    div.querySelector('.profile-key-header').addEventListener('click', () => toggleCombinedDetails(user.keys));
+    keysEl.appendChild(div);
   } else {
     keysEl.innerHTML = '<div class="profile-no-keys">No keys linked yet.</div>';
   }
+}
+
+async function toggleCombinedDetails(keys) {
+  const el = document.getElementById('kd-combined');
+  if (el.classList.contains('open')) {
+    el.classList.remove('open');
+    document.querySelector('.profile-key-item')?.classList.remove('expanded');
+    return;
+  }
+  el.classList.add('open');
+  document.querySelector('.profile-key-item')?.classList.add('expanded');
+
+  const token = localStorage.getItem('exon_token');
+  let html = '';
+
+  for (const k of keys) {
+    try {
+      const res  = await fetch(`${API}/api/key/${encodeURIComponent(k.key_value)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) continue;
+
+      const purchased = data.purchased_at ? new Date(data.purchased_at).toLocaleString() : '—';
+      const activated = data.activated_at ? new Date(data.activated_at).toLocaleString() : 'Not yet';
+      const expires   = data.expires_at   ? new Date(data.expires_at).toLocaleString()   : (data.activated_at ? 'Never' : 'Not Redeemed');
+      const timeLeft  = data.expired ? 'Expired'
+                      : data.expires_at ? formatTimeLeft(data.expires_at)
+                      : data.activated_at ? '∞'
+                      : formatMinutes(data.length);
+      const hwid      = data.hwid ?? null;
+      const hwidHtml  = hwid
+        ? `<span class="key-hwid-wrap"><span class="key-hwid">${hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}', this)">Reset</button></span>`
+        : `<span style="color:var(--text-dim)">Not activated yet</span>`;
+
+      html += `
+        <div class="key-sub-entry">
+          <div class="key-sub-label">${k.plan ?? 'License'}</div>
+          <div class="key-detail-row"><span>Purchased</span><span>${purchased}</span></div>
+          <div class="key-detail-row"><span>Activated</span><span>${activated}</span></div>
+          <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
+          <div class="key-detail-row"><span>Time Left</span><span class="${data.expired ? 'key-expired' : 'key-active'}">${timeLeft}</span></div>
+          <div class="key-detail-row hwid-row"><span>HWID</span>${hwidHtml}</div>
+        </div>
+      `;
+    } catch { continue; }
+  }
+
+  el.innerHTML = html || '<div class="key-detail-err">Could not load details.</div>';
 }
 
 async function toggleKeyDetails(keyValue) {

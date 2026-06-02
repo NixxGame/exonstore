@@ -81,8 +81,8 @@ const IS_TEST = (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_');
 function generateKey() {
   const chars  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const seg    = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  const suffix = IS_TEST ? '-test' : '';
-  return `exon-${seg()}-${seg()}-${seg()}${suffix}`;
+  const prefix = IS_TEST ? 'test' : 'exon';
+  return `${prefix}-${seg()}-${seg()}-${seg()}`;
 }
 
 // ── Cloudflare KV ────────────────────────────────────────────────────────────
@@ -506,6 +506,22 @@ app.get('/api/me', requireAuth, async (req, res) => {
 
   const keys = db.getUserKeys(req.discordId);
 
+  // Calculate combined time remaining across all keys
+  let combinedMs = 0;
+  let anyActivated = false;
+  for (const k of keys) {
+    const cf = await cfRead(k.key_value);
+    if (!cf) continue;
+    if (cf.time_created && cf.length) {
+      anyActivated = true;
+      const remaining = (cf.time_created + cf.length * 60 * 1000) - Date.now();
+      if (remaining > 0) combinedMs += remaining;
+    } else if (cf.length) {
+      // Not yet activated — count full duration
+      combinedMs += cf.length * 60 * 1000;
+    }
+  }
+
   // Sync role from Discord
   const discordRole = await getHighestDiscordRole(req.discordId);
   if (discordRole && discordRole !== user.role) {
@@ -513,7 +529,12 @@ app.get('/api/me', requireAuth, async (req, res) => {
     user.role = discordRole;
   }
 
-  res.json({ ...user, keys });
+  res.json({
+    ...user,
+    keys,
+    combined_ms:        combinedMs,
+    combined_activated: anyActivated,
+  });
 });
 
 // ── API: key details ──────────────────────────────────────────────────────────
@@ -558,35 +579,11 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   if (!user) user = await restoreUserFromCF(req.discordId);
   if (!user) return res.status(404).json({ error: 'User record not found — please log in first' });
 
-  // ── Stacking: find existing active key for this user ─────────────────────
-  const incomingCF  = await cfRead(key);
-  const addMinutes  = incomingCF?.length ?? null;
-  const userKeys    = db.getUserKeys(req.discordId);
-  const activeKey   = userKeys.find(k => k.active);
-
-  if (activeKey && addMinutes) {
-    const existingCF = await cfRead(activeKey.key_value);
-    if (existingCF) {
-      const currentLength = existingCF.length ?? 0;
-      existingCF.length   = currentLength + addMinutes;
-      await cfWrite(activeKey.key_value, existingCF);
-
-      // Consumed key — remove from local db and CF KV entirely
-      db.linkKey(key, req.discordId);
-      db.removeLinkedKey(req.discordId, key);
-      await cfDelete(key);
-
-      console.log(`Stacked ${addMinutes}m onto ${activeKey.key_value} for ${req.discordId} — deleted consumed key ${key}`);
-      return res.json({ success: true, stacked: true, stacked_into: activeKey.key_value });
-    }
-  }
-
-  // No existing key — link normally
   db.linkKey(key, req.discordId);
   promoteUser(req.discordId, 'customer');
   addLinkedKeyToCF(req.discordId, key);
 
-  res.json({ success: true, stacked: false });
+  res.json({ success: true });
 });
 
 // ── API: loader verify (Discord-based, no key entry) ─────────────────────────
@@ -605,49 +602,62 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   }
 
   const userKeys = db.getUserKeys(discord_id);
-  const activeKey = userKeys.find(k => k.active);
-
-  if (!activeKey) {
+  if (!userKeys.length) {
     return res.json({ valid: false, reason: 'No active key found for this account' });
   }
 
-  const cf = await cfRead(activeKey.key_value);
-  if (!cf) {
-    return res.json({ valid: false, reason: 'Key not found' });
-  }
+  // Find which key to activate/use (first unactivated, or first with time remaining)
+  let primaryKey = null;
+  let primaryCF  = null;
 
-  // Check expiry
-  if (cf.time_created && cf.length) {
-    const expiresAt = cf.time_created + cf.length * 60 * 1000;
-    if (Date.now() > expiresAt) {
-      db.removeLinkedKey(discord_id, activeKey.key_value);
-      removeLinkedKeyFromCF(discord_id, activeKey.key_value);
-      return res.json({ valid: false, reason: 'Key has expired' });
+  for (const k of userKeys) {
+    const cf = await cfRead(k.key_value);
+    if (!cf) continue;
+
+    // Skip expired keys
+    if (cf.time_created && cf.length) {
+      const expiresAt = cf.time_created + cf.length * 60 * 1000;
+      if (Date.now() > expiresAt) continue;
     }
+
+    // HWID check — must match this machine or be unbound
+    if (cf.hwid && cf.hwid !== hwid) continue;
+
+    primaryKey = k;
+    primaryCF  = cf;
+    break;
   }
 
-  // HWID mismatch
-  if (cf.hwid && cf.hwid !== hwid) {
+  if (!primaryKey) {
     return res.json({ valid: false, reason: 'HWID mismatch — reset your HWID on exoncheats.com if you changed PCs' });
   }
 
-  // First activation — bind HWID and start clock
-  if (!cf.hwid) {
-    cf.hwid         = hwid;
-    cf.time_created = Date.now();
-    await cfWrite(activeKey.key_value, cf);
-    console.log(`Key ${activeKey.key_value} activated for Discord user ${discord_id}`);
+  // First activation — bind HWID and start clock on this key
+  if (!primaryCF.hwid) {
+    primaryCF.hwid         = hwid;
+    primaryCF.time_created = Date.now();
+    await cfWrite(primaryKey.key_value, primaryCF);
+    console.log(`Key ${primaryKey.key_value} activated for ${discord_id}`);
   }
 
-  const expiresAt = cf.time_created && cf.length
-    ? cf.time_created + cf.length * 60 * 1000
-    : null;
+  // Sum total time remaining across ALL keys bound to this HWID
+  let combinedMs = 0;
+  for (const k of userKeys) {
+    const cf = await cfRead(k.key_value);
+    if (!cf) continue;
+    if (cf.hwid && cf.hwid !== hwid) continue; // different machine
+    if (cf.time_created && cf.length) {
+      const remaining = (cf.time_created + cf.length * 60 * 1000) - Date.now();
+      if (remaining > 0) combinedMs += remaining;
+    } else if (cf.length && !cf.hwid) {
+      combinedMs += cf.length * 60 * 1000; // unactivated keys add full duration
+    }
+  }
 
   return res.json({
-    valid:      true,
-    key:        activeKey.key_value,
-    plan:       activeKey.plan ?? 'License',
-    expires_at: expiresAt,
+    valid:           true,
+    expires_in_ms:   combinedMs,
+    expires_at:      combinedMs > 0 ? Date.now() + combinedMs : null,
   });
 });
 
