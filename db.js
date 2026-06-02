@@ -44,7 +44,7 @@ module.exports = {
     const data = readDB();
     if (!data.keys[keyValue]) {
       data.keys[keyValue] = {
-        key_value: keyValue, discord_id: null, active: true,
+        key_value: keyValue, discord_id: null, active: false,
         plan, stripe_session_id: sessionId, customer_email: email,
         created_at: Math.floor(Date.now() / 1000),
       };
@@ -59,6 +59,10 @@ module.exports = {
     return Object.values(readDB().keys)
       .filter(k => k.discord_id === discordId && k.active)
       .sort((a, b) => b.created_at - a.created_at);
+  },
+  activateKey(keyValue) {
+    const data = readDB();
+    if (data.keys[keyValue]) { data.keys[keyValue].active = true; writeDB(data); }
   },
   deactivateKey(keyValue) {
     const data = readDB();

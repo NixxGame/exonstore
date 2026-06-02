@@ -152,10 +152,10 @@ async function writeKeyToCF(key, discordId, plan) {
     key,
     discord_id:   discordId ?? null,
     hwid:         null,
-    time_created: null,        // set on first activation by loader, not on purchase
+    time_created: null,
     purchased_at: Date.now(),
     length:       planToMinutes(plan),
-    active:       true,
+    active:       false,  // becomes true only when linked to a Discord account
   });
 }
 
@@ -362,21 +362,32 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
 app.use(express.static(path.join(__dirname)));
 
+// ── Loader OAuth state store ──────────────────────────────────────────────────
+const loaderStates = new Map(); // state -> { discord_id, username, jwt, expires_at }
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of loaderStates)
+    if (v.expires_at < now) loaderStates.delete(k);
+}, 60_000);
+
 // ── Discord OAuth ─────────────────────────────────────────────────────────────
 
 app.get('/auth/discord', (req, res) => {
+  const loaderState = req.query.loader_state ?? null;
   const params = new URLSearchParams({
     client_id:     process.env.DISCORD_CLIENT_ID,
     redirect_uri:  process.env.DISCORD_REDIRECT_URI,
     response_type: 'code',
     scope:         'identify guilds.join',
+    ...(loaderState ? { state: `loader:${loaderState}` } : {}),
   });
   res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
 
 app.get('/auth/discord/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
   if (!code) return res.redirect('/?error=no_code');
+  const loaderState = (state && state.startsWith('loader:')) ? state.slice(7) : null;
 
   try {
     const tokenRes = await axios.post(
@@ -419,9 +430,31 @@ app.get('/auth/discord/callback', async (req, res) => {
     }
 
     const token = issueToken(id);
+
+    // If this was a loader login, store the result for polling and show a done page
+    if (loaderState) {
+      loaderStates.set(loaderState, {
+        discord_id: id,
+        username,
+        jwt:        token,
+        expires_at: Date.now() + 10 * 60 * 1000,
+      });
+      console.log(`Loader OAuth complete for ${username} (${id}), state=${loaderState}`);
+      return res.send(`<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Exon External</title>
+        <style>body{margin:0;background:#06080d;display:flex;align-items:center;
+        justify-content:center;height:100vh;font-family:system-ui;color:#eef0f6;}
+        .box{text-align:center;padding:40px;background:#0e1119;border-radius:16px;
+        border:1px solid rgba(240,122,18,.3);}
+        h2{color:#f07a12;margin:0 0 10px}p{color:#7a8394;margin:0}</style></head>
+        <body><div class="box"><h2>&#10003; Authorized</h2>
+        <p>You can close this tab and return to the Exon loader.</p></div></body></html>`);
+    }
+
     res.redirect(`/?token=${token}`);
   } catch (err) {
     console.error('OAuth error:', err.response?.data ?? err.message);
+    if (loaderState) return res.redirect('/loader-error');
     res.redirect('/?error=oauth_failed');
   }
 });
@@ -572,10 +605,48 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   if (!user) return res.status(404).json({ error: 'User record not found — please log in first' });
 
   db.linkKey(key, req.discordId);
+  db.activateKey(key);
   promoteUser(req.discordId, 'customer');
   addLinkedKeyToCF(req.discordId, key);
 
+  // Activate in CF KV too
+  const cf = await cfRead(key);
+  if (cf) {
+    cf.discord_id = req.discordId;
+    cf.active     = true;
+    await cfWrite(key, cf);
+  }
+
   res.json({ success: true });
+});
+
+// ── API: loader poll (OAuth flow) ─────────────────────────────────────────────
+
+app.get('/api/loader/poll/:state', (req, res) => {
+  const auth = req.headers.authorization ?? '';
+  if (auth !== `Bearer ${process.env.LOADER_SECRET}`)
+    return res.status(401).json({ ready: false });
+
+  const entry = loaderStates.get(req.params.state);
+  if (!entry || entry.expires_at < Date.now()) {
+    loaderStates.delete(req.params.state);
+    return res.json({ ready: false });
+  }
+
+  res.json({ ready: true, discord_id: entry.discord_id, username: entry.username, jwt: entry.jwt });
+});
+
+// ── API: loader member check ──────────────────────────────────────────────────
+
+app.get('/api/loader/member/:discordId', async (req, res) => {
+  const auth = req.headers.authorization ?? '';
+  if (auth !== `Bearer ${process.env.LOADER_SECRET}`) {
+    return res.status(401).json({ valid: false });
+  }
+  const user = db.getUser(req.params.discordId)
+             ?? await restoreUserFromCF(req.params.discordId);
+  if (!user) return res.json({ valid: false, reason: 'Discord account not linked on exoncheats.com' });
+  res.json({ valid: true, username: user.username, role: user.role });
 });
 
 // ── API: loader verify (Discord-based, no key entry) ─────────────────────────
