@@ -46,6 +46,19 @@ const commands = [
     .setDescription('Link a license key to your Discord account')
     .addStringOption(o => o.setName('key').setDescription('Your license key').setRequired(true))
     .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName('setrole')
+    .setDescription('Set a user\'s role (owner only)')
+    .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
+    .addStringOption(o => o.setName('role').setDescription('Role to assign').setRequired(true)
+      .addChoices(
+        { name: 'Member',    value: 'member' },
+        { name: 'Customer',  value: 'customer' },
+        { name: 'Staff',     value: 'staff' },
+        { name: 'Developer', value: 'developer' },
+      ))
+    .toJSON(),
 ];
 
 // ── Register commands (node bot.js --register) ────────────────────────────────
@@ -177,6 +190,34 @@ function startBot() {
         // Can't DM target — send to mod ephemerally
         await interaction.editReply({ content: `❌ Couldn't DM ${target.username} (DMs closed). Here's their info:`, embeds: [embed] });
       }
+      return;
+    }
+
+    // /setrole (owner only)
+    if (interaction.commandName === 'setrole') {
+      const ownerId = process.env.OWNER_DISCORD_ID;
+      if (interaction.user.id !== ownerId) {
+        await interaction.reply({ content: 'Only the owner can use this command.', ephemeral: true });
+        return;
+      }
+      await interaction.deferReply({ ephemeral: true });
+      const target = interaction.options.getUser('user');
+      const role   = interaction.options.getString('role');
+
+      db.upsertUser(target.id, target.username, target.displayAvatarURL({ size: 128 }));
+      db.setUserRole(target.id, role);
+
+      // Assign Discord role
+      const roleEnvKey = `DISCORD_ROLE_${role.toUpperCase()}`;
+      const roleId = process.env[roleEnvKey];
+      if (roleId) {
+        try {
+          const member = await interaction.guild.members.fetch(target.id);
+          await member.roles.add(roleId);
+        } catch {}
+      }
+
+      await interaction.editReply(`✅ Set **${target.username}** to **${role}**.`);
       return;
     }
 
