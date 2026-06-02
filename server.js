@@ -122,6 +122,18 @@ async function cfWrite(kvKey, data) {
   }
 }
 
+async function cfDelete(kvKey) {
+  if (!cfReady()) return;
+  try {
+    await axios.delete(
+      `${cfBase()}/values/${encodeURIComponent(kvKey)}`,
+      { headers: cfHeaders() }
+    );
+  } catch (err) {
+    console.error('CF KV delete error:', err.response?.data ?? err.message);
+  }
+}
+
 async function cfRead(kvKey) {
   if (!cfReady()) return null;
   try {
@@ -553,12 +565,12 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
       existingCF.length   = currentLength + addMinutes;
       await cfWrite(activeKey.key_value, existingCF);
 
-      // Mark incoming key as consumed (linked + deactivated)
+      // Consumed key — remove from local db and CF KV entirely
       db.linkKey(key, req.discordId);
-      db.deactivateKey(key);
-      await cfWrite(key, { ...incomingCF, discord_id: req.discordId, active: false, stacked_into: activeKey.key_value });
+      db.removeLinkedKey(req.discordId, key);
+      await cfDelete(key);
 
-      console.log(`Stacked ${addMinutes}m onto ${activeKey.key_value} for ${req.discordId}`);
+      console.log(`Stacked ${addMinutes}m onto ${activeKey.key_value} for ${req.discordId} — deleted consumed key ${key}`);
       return res.json({ success: true, stacked: true, stacked_into: activeKey.key_value });
     }
   }
@@ -569,6 +581,89 @@ app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
   addLinkedKeyToCF(req.discordId, key);
 
   res.json({ success: true, stacked: false });
+});
+
+// ── API: loader verify (Discord-based, no key entry) ─────────────────────────
+// Loader sends: POST /api/loader/verify  { discord_id, hwid }
+// Auth: Authorization: Bearer <LOADER_SECRET>
+
+app.post('/api/loader/verify', express.json(), async (req, res) => {
+  const auth = req.headers.authorization ?? '';
+  if (auth !== `Bearer ${process.env.LOADER_SECRET}`) {
+    return res.status(401).json({ valid: false, reason: 'Unauthorized' });
+  }
+
+  const { discord_id, hwid } = req.body ?? {};
+  if (!discord_id || !hwid) {
+    return res.status(400).json({ valid: false, reason: 'discord_id and hwid required' });
+  }
+
+  const userKeys = db.getUserKeys(discord_id);
+  const activeKey = userKeys.find(k => k.active);
+
+  if (!activeKey) {
+    return res.json({ valid: false, reason: 'No active key found for this account' });
+  }
+
+  const cf = await cfRead(activeKey.key_value);
+  if (!cf) {
+    return res.json({ valid: false, reason: 'Key not found' });
+  }
+
+  // Check expiry
+  if (cf.time_created && cf.length) {
+    const expiresAt = cf.time_created + cf.length * 60 * 1000;
+    if (Date.now() > expiresAt) {
+      db.removeLinkedKey(discord_id, activeKey.key_value);
+      removeLinkedKeyFromCF(discord_id, activeKey.key_value);
+      return res.json({ valid: false, reason: 'Key has expired' });
+    }
+  }
+
+  // HWID mismatch
+  if (cf.hwid && cf.hwid !== hwid) {
+    return res.json({ valid: false, reason: 'HWID mismatch — reset your HWID on exoncheats.com if you changed PCs' });
+  }
+
+  // First activation — bind HWID and start clock
+  if (!cf.hwid) {
+    cf.hwid         = hwid;
+    cf.time_created = Date.now();
+    await cfWrite(activeKey.key_value, cf);
+    console.log(`Key ${activeKey.key_value} activated for Discord user ${discord_id}`);
+  }
+
+  const expiresAt = cf.time_created && cf.length
+    ? cf.time_created + cf.length * 60 * 1000
+    : null;
+
+  return res.json({
+    valid:      true,
+    key:        activeKey.key_value,
+    plan:       activeKey.plan ?? 'License',
+    expires_at: expiresAt,
+  });
+});
+
+// ── API: reset HWID ───────────────────────────────────────────────────────────
+
+app.post('/api/reset-hwid', requireAuth, express.json(), async (req, res) => {
+  const { key_value } = req.body ?? {};
+  if (!key_value) return res.status(400).json({ error: 'key_value required' });
+
+  const local = db.getKey(key_value);
+  if (!local || local.discord_id !== req.discordId) {
+    return res.status(404).json({ error: 'Key not found' });
+  }
+
+  const cf = await cfRead(key_value);
+  if (!cf) return res.status(404).json({ error: 'Key not found in CF' });
+
+  cf.hwid = null;
+  await cfWrite(key_value, cf);
+  console.log(`HWID reset for key ${key_value} by ${req.discordId}`);
+
+  res.json({ success: true });
 });
 
 // ── API: mod check ────────────────────────────────────────────────────────────

@@ -122,12 +122,22 @@ async function toggleKeyDetails(keyValue) {
                      : formatMinutes(data.length); // not yet activated — show full plan duration
     const hwid       = data.hwid ?? 'Not activated yet';
 
+    const hwidHtml = data.hwid
+      ? `<div class="key-detail-row hwid-row">
+           <span>HWID</span>
+           <span class="key-hwid-wrap">
+             <span class="key-hwid">${data.hwid}</span>
+             <button class="key-hwid-reset" onclick="resetHwid('${data.key_value}', this)">Reset</button>
+           </span>
+         </div>`
+      : `<div class="key-detail-row"><span>HWID</span><span style="color:var(--text-dim)">Not activated yet</span></div>`;
+
     el.innerHTML = `
       <div class="key-detail-row"><span>Purchased</span><span>${purchased}</span></div>
       <div class="key-detail-row"><span>Activated</span><span>${activated}</span></div>
       <div class="key-detail-row"><span>Expires</span><span>${expires}</span></div>
       <div class="key-detail-row"><span>Time Left</span><span class="${data.expired ? 'key-expired' : 'key-active'}">${timeLeft}</span></div>
-      <div class="key-detail-row hwid-row"><span>HWID</span><span class="key-hwid">${hwid}</span></div>
+      ${hwidHtml}
     `;
   } catch {
     el.innerHTML = '<div class="key-detail-err">Could not load details.</div>';
@@ -143,6 +153,30 @@ function formatTimeLeft(expiresAt) {
   if (days > 0)  return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
+}
+
+async function resetHwid(keyValue, btn) {
+  if (!confirm('Reset your HWID? The next time you run the loader it will bind to your new machine.')) return;
+  btn.disabled = true;
+  btn.textContent = '...';
+  const token = localStorage.getItem('exon_token');
+  try {
+    const res = await fetch(`${API}/api/reset-hwid`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key_value: keyValue }),
+    });
+    if (res.ok) {
+      btn.closest('.hwid-row').querySelector('.key-hwid').textContent = 'Reset — activate on next loader launch';
+      btn.remove();
+    } else {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Reset'; }, 2000);
+    }
+  } catch {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.disabled = false; btn.textContent = 'Reset'; }, 2000);
+  }
 }
 
 function formatMinutes(minutes) {

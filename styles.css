@@ -1124,6 +1124,22 @@ footer {
 }
 .key-active { color: #4ade80 !important; }
 .key-expired { color: #f87171 !important; }
+.key-hwid-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.key-hwid { font-family: 'Courier New', Courier, monospace; font-size: .68rem; color: var(--text-dim); word-break: break-all; }
+.key-hwid-reset {
+  flex-shrink: 0;
+  font-size: .65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(240,122,18,.4);
+  background: transparent;
+  color: var(--orange);
+  cursor: pointer;
+  transition: background .15s;
+}
+.key-hwid-reset:hover { background: rgba(240,122,18,.12); }
+.key-hwid-reset:disabled { opacity: .5; cursor: not-allowed; }
 .key-detail-loading,
 .key-detail-err {
   font-size: .72rem;
