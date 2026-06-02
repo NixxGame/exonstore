@@ -128,7 +128,7 @@ async function toggleCombinedDetails(keys) {
       const hwid      = data.hwid ?? null;
       const hwidHtml  = hwid
         ? `<span class="key-hwid-wrap"><span class="key-hwid">${hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}', this)">Reset</button></span>`
-        : `<span style="color:var(--text-dim)">Not activated yet</span>`;
+        : `<span class="key-not-activated">Run the loader to activate</span>`;
 
       html += `
         <div class="key-sub-entry">

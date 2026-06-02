@@ -1137,7 +1137,8 @@ footer {
   color: var(--orange);
   margin-bottom: 6px;
 }
-.key-hwid-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.key-hwid-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.key-not-activated { font-size: .7rem; color: var(--text-dim); font-style: italic; }
 .key-hwid { font-family: 'Courier New', Courier, monospace; font-size: .68rem; color: var(--text-dim); word-break: break-all; }
 .key-hwid-reset {
   flex-shrink: 0;
