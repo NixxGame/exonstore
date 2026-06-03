@@ -173,7 +173,7 @@ async function loadKeyList(keys, container) {
                       : data.activated_at ? '∞'
                       : formatMinutes(data.length);
       const hwidHtml  = data.hwid
-        ? `<span class="key-hwid-wrap"><span class="key-hwid">${data.hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}',this)">Reset</button></span>`
+        ? `<div class="key-hwid-wrap"><span class="key-hwid">${data.hwid}</span><button class="key-hwid-reset" onclick="resetHwid('${data.key_value}',this)">Reset</button></div>`
         : `<span class="key-not-activated">Run the loader to activate</span>`;
 
       entry.innerHTML = `
@@ -239,10 +239,10 @@ async function toggleKeyDetails(keyValue) {
     const hwidHtml = data.hwid
       ? `<div class="key-detail-row hwid-row">
            <span>HWID</span>
-           <span class="key-hwid-wrap">
+           <div class="key-hwid-wrap">
              <span class="key-hwid">${data.hwid}</span>
              <button class="key-hwid-reset" onclick="resetHwid('${data.key_value}', this)">Reset</button>
-           </span>
+           </div>
          </div>`
       : `<div class="key-detail-row"><span>HWID</span><span style="color:var(--text-dim)">Not activated yet</span></div>`;
 
@@ -451,11 +451,32 @@ document.querySelectorAll('.card, .faq-item, .pricing-box, .feat-item').forEach(
 });
 
 
-// ── NAV SCROLL STATE ───────────────────────────────────────────────────────
+// ── NAV SCROLL STATE + SCROLL-SPY + SCROLL-TO-TOP ─────────────────────────
 
 const nav = document.getElementById('nav');
+const scrollTopBtn = document.getElementById('scroll-top');
+
+const sections = ['overview','feature-list','pricing','faq','download']
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
 window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 50);
+  const y = window.scrollY;
+
+  // scrolled shadow
+  nav.classList.toggle('scrolled', y > 50);
+
+  // scroll-to-top visibility
+  scrollTopBtn.classList.toggle('visible', y > 400);
+
+  // scroll-spy
+  let current = '';
+  sections.forEach(sec => {
+    if (y >= sec.offsetTop - 140) current = sec.id;
+  });
+  document.querySelectorAll('.nav-links a[data-section]').forEach(a => {
+    a.classList.toggle('nav-active', a.dataset.section === current);
+  });
 }, { passive: true });
 
 
@@ -469,6 +490,49 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
     e.preventDefault();
     const top = target.getBoundingClientRect().top + window.scrollY - 88;
     window.scrollTo({ top, behavior: 'smooth' });
+  });
+});
+
+
+// ── MOBILE NAV ─────────────────────────────────────────────────────────────
+
+function toggleMobileNav() {
+  const hamburger = document.getElementById('nav-hamburger');
+  const links = document.getElementById('nav-links');
+  hamburger.classList.toggle('open');
+  links.classList.toggle('mobile-open');
+}
+
+// Close mobile nav when a link is clicked
+document.querySelectorAll('.nav-links a').forEach(a => {
+  a.addEventListener('click', () => {
+    document.getElementById('nav-hamburger').classList.remove('open');
+    document.getElementById('nav-links').classList.remove('mobile-open');
+  });
+});
+
+
+// ── FAQ ACCORDION ──────────────────────────────────────────────────────────
+
+function toggleFaq(item) {
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(el => el.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+}
+
+
+// ── CLICK-TO-COPY KEY VALUE ────────────────────────────────────────────────
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('.profile-key-value');
+  if (!el) return;
+  const text = el.textContent.trim();
+  if (!text || text === 'Exon External License') return;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    el.style.color = '#4ade80';
+    setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
   });
 });
 

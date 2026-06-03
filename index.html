@@ -24,12 +24,16 @@
     <img src="assets/exon.png" alt="Exon">
     <span>Exon External</span>
   </a>
-  <div class="nav-links">
-    <a href="#overview">Overview</a>
-    <a href="#feature-list">Features</a>
-    <a href="#pricing">Pricing</a>
-    <a href="#faq">FAQ</a>
-    <a href="#download">Download</a>
+  <button class="nav-hamburger" id="nav-hamburger" aria-label="Menu" onclick="toggleMobileNav()">
+    <span></span><span></span><span></span>
+  </button>
+
+  <div class="nav-links" id="nav-links">
+    <a href="#overview" data-section="overview">Overview</a>
+    <a href="#feature-list" data-section="feature-list">Features</a>
+    <a href="#pricing" data-section="pricing">Pricing</a>
+    <a href="#faq" data-section="faq">FAQ</a>
+    <a href="#download" data-section="download">Download</a>
     <div class="nav-auth">
       <!-- shown when not logged in -->
       <a id="nav-login" href="/auth/discord" class="nav-login-btn">
@@ -115,6 +119,7 @@
 
   <div class="hero-buttons">
     <a href="#pricing" class="primary-btn">Purchase Now</a>
+    <a href="#download" class="secondary-btn">⬇ Download Loader</a>
     <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener" class="secondary-btn">Join Discord</a>
   </div>
 
@@ -446,6 +451,7 @@
         <div class="dl-file-name">loader.exe</div>
         <div class="dl-file-meta">
           <span class="dl-badge">Windows x64</span>
+          <span class="dl-version" id="dl-version">v1.0.0</span>
           <span class="dl-size" id="dl-size">Checking size…</span>
         </div>
       </div>
@@ -470,19 +476,40 @@
 
   <div class="faq">
 
-    <div class="faq-item">
-      <h3>How do I receive access?</h3>
-      <p>Instructions are sent automatically right after a successful checkout. Check your email and follow the steps provided.</p>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-header">
+        <h3>How do I receive access?</h3>
+        <span class="faq-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </div>
+      <div class="faq-body">
+        <p>Instructions are sent automatically right after a successful checkout. Check your email and follow the steps provided.</p>
+      </div>
     </div>
 
-    <div class="faq-item">
-      <h3>What payment methods are accepted?</h3>
-      <p>We accept Credit Cards, Debit Cards, PayPal, and Cash App Pay — all processed securely via Stripe.</p>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-header">
+        <h3>What payment methods are accepted?</h3>
+        <span class="faq-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </div>
+      <div class="faq-body">
+        <p>We accept Credit Cards, Debit Cards, PayPal, and Cash App Pay — all processed securely via Stripe.</p>
+      </div>
     </div>
 
-    <div class="faq-item">
-      <h3>Need help?</h3>
-      <p>Join our <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener">Discord server</a> and open a support ticket. Our team responds quickly.</p>
+    <div class="faq-item" onclick="toggleFaq(this)">
+      <div class="faq-header">
+        <h3>Need help?</h3>
+        <span class="faq-chevron">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </div>
+      <div class="faq-body">
+        <p>Join our <a href="https://discord.gg/NczWT7nyAs" target="_blank" rel="noopener">Discord server</a> and open a support ticket. Our team responds quickly.</p>
+      </div>
     </div>
 
   </div>
@@ -504,6 +531,10 @@
     <p class="footer-copy">© 2026 Exon External. All rights reserved.</p>
   </div>
 </footer>
+
+<button id="scroll-top" class="scroll-top-btn" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
 
 <script src="script.js"></script>
 </body>
