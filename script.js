@@ -445,7 +445,7 @@ const observer = new IntersectionObserver(
   { threshold: 0.08 }
 );
 
-document.querySelectorAll('.card, .faq-item, .pricing-box, .feat-item').forEach(el => {
+document.querySelectorAll('.card, .pricing-box, .feat-item').forEach(el => {
   el.classList.add('reveal');
   observer.observe(el);
 });

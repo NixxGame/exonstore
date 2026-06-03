@@ -171,239 +171,285 @@
   <h2 class="section-title">Feature List</h2>
 
   <div class="feat-tabs">
-    <button class="feat-tab active" data-tab="esp">ESP</button>
-    <button class="feat-tab" data-tab="auras">Auras</button>
-    <button class="feat-tab" data-tab="info">Player Info</button>
-    <button class="feat-tab" data-tab="misc">Misc</button>
+    <button class="feat-tab active" data-tab="player">Player</button>
+    <button class="feat-tab" data-tab="world">World</button>
+    <button class="feat-tab" data-tab="exploits">Exploits</button>
+    <button class="feat-tab" data-tab="configs">Configs</button>
   </div>
 
   <div class="feat-panels">
 
-    <div class="feat-panel active" id="tab-esp">
+    <!-- PLAYER -->
+    <div class="feat-panel active" id="tab-player">
       <div class="feat-grid">
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Survivor ESP</strong>
-            <p>See all survivors through walls with customizable bounding boxes and skeleton overlays.</p>
+            <strong>Survivor Aura</strong>
+            <p>See all survivors through walls with a customizable aura color overlay.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Killer ESP</strong>
-            <p>Track the killer's position at all times with distance readout and direction indicator.</p>
+            <strong>Survivor Skeleton</strong>
+            <p>Full bone skeleton rendered on survivors for precise positional awareness.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Bone / Skeleton Rendering</strong>
-            <p>Full skeleton overlay on survivors and killers for precise positional awareness.</p>
+            <strong>Survivor Snapline</strong>
+            <p>Line drawn from the center of your screen to every survivor for instant direction tracking.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Distance Display</strong>
-            <p>Real-time distance in meters displayed beneath every entity's name tag.</p>
+            <strong>Survivor Player Label</strong>
+            <p>Name tag displayed above each survivor so you always know who you're looking at.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Snap Lines</strong>
-            <p>Optional lines drawn from the center of the screen to each entity for quick scanning.</p>
+            <strong>Survivor Distance</strong>
+            <p>Real-time distance readout shown beneath each survivor's name tag.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>2D Minimap Radar</strong>
-            <p>Compact overhead radar showing all entity positions relative to your own.</p>
+            <strong>Blind Progress</strong>
+            <p>Tracks and displays the blind progress bar for each survivor in view.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Customizable Colors</strong>
-            <p>Per-entity color settings for boxes, skeletons, and snap lines via the in-overlay config.</p>
+            <strong>Survivor Compass</strong>
+            <p>Direction compass indicator for survivors so you can track movement off-screen.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Visibility Check</strong>
-            <p>Color-coded indicator showing whether an entity is visible or obscured by geometry.</p>
+            <strong>Killer Aura</strong>
+            <p>Killer position revealed through walls with a distinct aura color.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Skeleton</strong>
+            <p>Full skeleton overlay on the killer for precise positional reads.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Snapline</strong>
+            <p>Snapline drawn to the killer's position so you never lose track of their location.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Player Label</strong>
+            <p>Killer name tag always visible regardless of walls or distance.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Distance</strong>
+            <p>Live distance counter to the killer updated every frame.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Character</strong>
+            <p>Displays the killer's character name so you know exactly what power you're up against.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Compass</strong>
+            <p>Compass indicator for the killer showing approach direction at a glance.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Crosshair</strong>
+            <p>Toggleable crosshair overlay for consistent aim reference on the killer side.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="feat-panel" id="tab-auras">
+    <!-- WORLD -->
+    <div class="feat-panel" id="tab-world">
       <div class="feat-grid">
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Generator Auras</strong>
-            <p>All generators highlighted with real-time repair progress percentage displayed.</p>
+            <strong>Generator Labels & Auras</strong>
+            <p>All generators shown with both a text label and an aura — track repair progress at a glance.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Hook Auras</strong>
-            <p>All hooks shown on the overlay including state (empty, occupied, broken) and use count.</p>
+            <strong>Chest Labels & Auras</strong>
+            <p>Every chest on the map highlighted with a label and colored aura, opened or not.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Chest Auras</strong>
-            <p>Locate every chest on the map — opened and unopened — at a glance.</p>
+            <strong>Pallet Labels & Auras</strong>
+            <p>Standing and dropped pallets marked so you can plan loops and drop decisions ahead of time.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Totem Auras</strong>
-            <p>All dull and hex totems revealed with a clear type label so you can prioritize cleansing.</p>
+            <strong>Totem Labels</strong>
+            <p>All dull and hex totems labeled on the overlay — prioritize cleansing without guessing.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Hatch Aura</strong>
-            <p>Hatch location shown the moment it spawns so you always know the escape route.</p>
+            <strong>Exit Gate Labels</strong>
+            <p>Both exit gates marked the moment they become active so you always know the escape route.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Exit Gate Auras</strong>
-            <p>Both exit gates highlighted as soon as generators are complete.</p>
+            <strong>Window Labels & Auras</strong>
+            <p>Vaultable windows highlighted with labels and auras to optimize chase pathing.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Pallet Auras</strong>
-            <p>Standing and dropped pallets marked so you can plan looping routes in advance.</p>
+            <strong>Hook Labels & Auras</strong>
+            <p>All hooks shown with labels and auras including state and use count.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Item Auras</strong>
-            <p>Ground items and dropped items visible through the map at all times.</p>
+            <strong>Trap Labels</strong>
+            <p>Bear traps and killer traps labeled so you never step into one blindly.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Hatch Label</strong>
+            <p>Hatch location shown the moment it spawns — always know your last-resort escape.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Aura Distance Limit</strong>
+            <p>Configurable distance slider controls how far away auras render to keep the overlay clean.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="feat-panel" id="tab-info">
+    <!-- EXPLOITS -->
+    <div class="feat-panel" id="tab-exploits">
       <div class="feat-grid">
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Survivor Health States</strong>
-            <p>Displays each survivor's current state: Healthy, Injured, Dying, or Hooked.</p>
+            <strong>Auto Skillcheck</strong>
+            <p>Automatically hits skillchecks for you. Mode configurable between Good and Great.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Hook Stage Tracker</strong>
-            <p>See exactly how many times each survivor has been hooked including sacrifice progress.</p>
+            <strong>Skillcheck Mode</strong>
+            <p>Choose between Good or Great hits — dial it in to avoid suspicion or maximize repair speed.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Carried Survivor Indicator</strong>
-            <p>Clear highlight when a survivor is being carried toward a hook.</p>
+            <strong>FOV Changer</strong>
+            <p>Adjusts your in-game field of view to a custom value via a slider for better situational awareness.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Survivor Item Display</strong>
-            <p>Shows the item each survivor is holding with an icon label next to their name.</p>
+            <strong>Speed Boost</strong>
+            <p>Enable a movement speed boost with a configurable boost percentage slider.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Obsession Highlight</strong>
-            <p>Obsession target always clearly distinguished from other survivors.</p>
-          </div>
-        </div>
-        <div class="feat-item">
-          <span class="feat-dot"></span>
-          <div>
-            <strong>Killer Identity</strong>
-            <p>Killer character name and power type shown in the HUD as soon as the match starts.</p>
-          </div>
-        </div>
-        <div class="feat-item">
-          <span class="feat-dot"></span>
-          <div>
-            <strong>Killer Terror Radius</strong>
-            <p>Visual ring showing the killer's current terror radius so you can react before hearing it.</p>
-          </div>
-        </div>
-        <div class="feat-item">
-          <span class="feat-dot"></span>
-          <div>
-            <strong>Name Tags</strong>
-            <p>Steam display names shown above each survivor so you always know who is who.</p>
+            <strong>Unlock All</strong>
+            <p>Unlocks all in-game cosmetics and items client-side without any server interaction.</p>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="feat-panel" id="tab-misc">
+    <!-- CONFIGS -->
+    <div class="feat-panel" id="tab-configs">
       <div class="feat-grid">
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>External Overlay</strong>
-            <p>Renders entirely outside the game process — no injection, no DLL, minimal detection surface.</p>
+            <strong>Named Config Saves</strong>
+            <p>Save your current settings to a named config file (e.g. cfg_01) and reload them any time.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Hotkey Toggle</strong>
-            <p>Bind any key to show or hide the overlay and individual feature categories on the fly.</p>
+            <strong>Streamproof Mode</strong>
+            <p>Hides the overlay from capture software and stream output so your screen share stays clean.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>In-Overlay Config Menu</strong>
-            <p>Full settings panel accessible in-game — adjust colors, toggles, and distances without Alt-Tab.</p>
+            <strong>Per-Feature Color Pickers</strong>
+            <p>Every ESP and aura element has its own color dot — fully customize the look of your overlay.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
             <strong>Auto-Updater</strong>
-            <p>Automatically fetches the latest build on launch so you're always running the newest version.</p>
+            <p>Loader fetches the latest build on launch — you're always running the newest version automatically.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
             <strong>HWID Lock</strong>
-            <p>License is locked to your hardware ID to prevent sharing and protect your account.</p>
+            <p>License is bound to your hardware ID with a self-service reset available from your dashboard.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Smooth Rendering</strong>
-            <p>60 FPS overlay rendering with interpolation for a clean, stutter-free visual experience.</p>
+            <strong>External Overlay</strong>
+            <p>Renders entirely outside the game process — no injection, no DLL, minimal detection surface.</p>
           </div>
         </div>
       </div>
