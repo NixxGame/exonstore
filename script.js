@@ -3,13 +3,17 @@
   const el = document.getElementById('dl-size');
   if (!el) return;
   try {
-    const res = await fetch('releases/loader.exe', { method: 'HEAD' });
-    const bytes = parseInt(res.headers.get('content-length') || '0', 10);
-    if (bytes > 0) {
-      const mb = (bytes / (1024 * 1024)).toFixed(2);
-      el.textContent = mb + ' MB';
-    } else {
-      el.textContent = '';
+    const res  = await fetch('/api/loader/version');
+    const data = await res.json();
+    if (data.size_mb) {
+      el.textContent = parseFloat(data.size_mb).toFixed(2) + ' MB';
+    } else if (data.url) {
+      // Fallback: HEAD the actual download URL for content-length
+      try {
+        const head  = await fetch(data.url, { method: 'HEAD' });
+        const bytes = parseInt(head.headers.get('content-length') || '0', 10);
+        if (bytes > 0) el.textContent = (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      } catch { /* leave blank */ }
     }
   } catch {
     el.textContent = '';

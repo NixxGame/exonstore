@@ -840,6 +840,7 @@ app.get('/api/loader/version', (req, res) => {
   res.json({
     version: process.env.LOADER_VERSION       ?? '1.0.0',
     url:     process.env.LOADER_DOWNLOAD_URL  ?? '',
+    size_mb: process.env.LOADER_SIZE_MB       ?? '',
   });
 });
 
