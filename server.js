@@ -832,6 +832,17 @@ app.get('/api/check/:discordId', requireAuth, (req, res) => {
   res.json({ ...target, keys });
 });
 
+// ── API: loader version (auto-updater) ───────────────────────────────────────
+// Loader checks this on every launch. Change LOADER_VERSION + LOADER_DOWNLOAD_URL
+// in your .env to push an update to all clients automatically.
+
+app.get('/api/loader/version', (req, res) => {
+  res.json({
+    version: process.env.LOADER_VERSION       ?? '1.0.0',
+    url:     process.env.LOADER_DOWNLOAD_URL  ?? '',
+  });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 async function cfListAllKeys() {
