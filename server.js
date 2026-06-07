@@ -352,6 +352,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     }
     console.log(`Payment confirmed [${event.type}] — plan="${plan}" session=${session.id}`);
 
+    if (!event.livemode) {
+      console.log(`Test payment detected — skipping key generation and email for session ${session.id}`);
+      return;
+    }
+
     const key = generateKey();
     db.insertKey(key, plan, session.id, email);
     await writeKeyToCF(key, null, plan);
