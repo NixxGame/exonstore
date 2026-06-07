@@ -77,6 +77,9 @@ function renderProfileCard(user) {
   document.getElementById('pc-avatar').src           = user.avatar ?? '';
   document.getElementById('pc-username').textContent = user.username;
 
+  const adminBtn = document.getElementById('pc-admin-btn');
+  if (adminBtn) adminBtn.style.display = ['staff','developer'].includes(user.role) ? '' : 'none';
+
   const badge = document.getElementById('pc-role-badge');
   badge.textContent    = ROLE_LABELS[user.role] ?? user.role;
   badge.dataset.role   = user.role;
@@ -529,6 +532,228 @@ document.addEventListener('click', e => {
     el.style.color = '#4ade80';
     setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
   });
+});
+
+
+// ── ADMIN KEY DASHBOARD ────────────────────────────────────────────────────
+
+let _adashPage  = 1;
+let _adashTotal = 0;
+let _adashQ     = '';
+let _adashTimer = null;
+let _adashTimeKey = null;
+const ADASH_LIMIT = 50;
+
+function adashOpen() {
+  document.getElementById('admin-dash').style.display = 'flex';
+  document.getElementById('profile-card-overlay').classList.remove('open');
+  _adashPage = 1;
+  _adashQ    = '';
+  document.getElementById('adash-search').value = '';
+  adashLoad();
+}
+
+function adashClose() {
+  document.getElementById('admin-dash').style.display = 'none';
+}
+
+function adashSearch() {
+  clearTimeout(_adashTimer);
+  _adashTimer = setTimeout(() => {
+    _adashQ    = document.getElementById('adash-search').value.trim();
+    _adashPage = 1;
+    adashLoad();
+  }, 300);
+}
+
+function adashPage(dir) {
+  const totalPages = Math.max(1, Math.ceil(_adashTotal / ADASH_LIMIT));
+  _adashPage = Math.max(1, Math.min(totalPages, _adashPage + dir));
+  adashLoad();
+}
+
+async function adashLoad() {
+  const tbody = document.getElementById('adash-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="adash-loading">Loading…</td></tr>';
+  const token  = localStorage.getItem('exon_token');
+  const params = new URLSearchParams({ q: _adashQ, page: _adashPage, limit: ADASH_LIMIT });
+  try {
+    const res  = await fetch(`/api/admin/keys?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 403) { adashClose(); return; }
+    const data = await res.json();
+    _adashTotal = data.total;
+    adashRender(data.keys, data.total);
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" class="adash-loading">Failed to load.</td></tr>';
+  }
+}
+
+function adashRender(keys, total) {
+  const tbody      = document.getElementById('adash-tbody');
+  const totalPages = Math.max(1, Math.ceil(total / ADASH_LIMIT));
+  document.getElementById('adash-count').textContent     = `${total} key${total !== 1 ? 's' : ''}`;
+  document.getElementById('adash-page-info').textContent = `Page ${_adashPage} of ${totalPages}`;
+  document.getElementById('adash-prev').disabled         = _adashPage <= 1;
+  document.getElementById('adash-next').disabled         = _adashPage >= totalPages;
+
+  if (!keys.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="adash-loading">No keys found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  keys.forEach(k => {
+    const tr = document.createElement('tr');
+
+    // Status
+    let status = 'unlinked', statusLabel = 'Unlinked';
+    if (k.banned)         { status = 'banned';   statusLabel = 'Banned';   }
+    else if (!k.discord_id) { status = 'unlinked'; statusLabel = 'Unlinked'; }
+    else if (k.time_created) {
+      const expired = k.expires_at && Date.now() > k.expires_at;
+      status      = expired ? 'expired' : 'active';
+      statusLabel = expired ? 'Expired' : 'Active';
+    } else { status = 'queued'; statusLabel = 'Queued'; }
+
+    // Expires column
+    let expiresStr = '—';
+    if (k.expires_at && Date.now() < k.expires_at) expiresStr = formatTimeLeft(k.expires_at);
+    else if (k.expires_at)  expiresStr = 'Expired';
+    else if (k.length_min && !k.time_created) expiresStr = formatMinutes(k.length_min) + ' total';
+
+    const userHtml = k.username
+      ? `<span class="adash-user">${escHtml(k.username)}</span>`
+      : '<span style="color:#404858">—</span>';
+
+    const hwidHtml = k.hwid
+      ? `<span title="${escHtml(k.hwid)}" style="font-family:monospace;font-size:.72rem;color:#7a8394">${k.hwid.slice(0,8)}…</span>`
+      : '<span style="color:#404858">—</span>';
+
+    const kv       = escHtml(k.key_value);
+    const banLabel = k.banned ? 'Unban' : 'Ban';
+    const banClass = k.banned ? 'warn'  : 'danger';
+
+    tr.innerHTML = `
+      <td><span class="adash-key-val" onclick="adashCopy(this,'${kv}')" title="${kv}">${kv}</span></td>
+      <td style="color:#7a8394">${escHtml(k.plan ?? '—')}</td>
+      <td>${userHtml}</td>
+      <td><span class="adash-badge ${status}">${statusLabel}</span></td>
+      <td style="color:#7a8394;font-size:.78rem">${expiresStr}</td>
+      <td>${hwidHtml}</td>
+      <td>
+        <div class="adash-actions-cell">
+          <button class="adash-action-btn warn"   onclick="adashOpenTime('${kv}')">+Time</button>
+          <button class="adash-action-btn ${banClass}" onclick="adashToggleBan('${kv}',${k.banned})">${banLabel}</button>
+          <button class="adash-action-btn"        onclick="adashResetHwid('${kv}')">↺ HWID</button>
+          <button class="adash-action-btn danger" onclick="adashDelete('${kv}')">Delete</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function adashCopy(el, key) {
+  navigator.clipboard.writeText(key).then(() => {
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    el.style.color = '#4ade80';
+    setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
+  });
+}
+
+async function adashToggleBan(key, isBanned) {
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/keys/${encodeURIComponent(key)}/ban`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ banned: !isBanned }),
+  });
+  adashLoad();
+}
+
+async function adashResetHwid(key) {
+  if (!confirm(`Reset HWID for ${key}?`)) return;
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/keys/${encodeURIComponent(key)}/reset-hwid`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+  });
+  adashLoad();
+}
+
+async function adashDelete(key) {
+  if (!confirm(`Permanently delete ${key}? This cannot be undone.`)) return;
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/keys/${encodeURIComponent(key)}`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+  });
+  adashLoad();
+}
+
+function adashOpenGenModal() {
+  document.getElementById('adash-gen-plan').value       = '';
+  document.getElementById('adash-gen-days').value       = '30';
+  document.getElementById('adash-gen-result').style.display = 'none';
+  document.getElementById('adash-gen-result').textContent   = '';
+  document.getElementById('adash-gen-modal').style.display  = 'flex';
+}
+
+function adashGenCancel() { document.getElementById('adash-gen-modal').style.display = 'none'; }
+
+async function adashGenSubmit() {
+  const plan = document.getElementById('adash-gen-plan').value.trim();
+  const days = parseFloat(document.getElementById('adash-gen-days').value);
+  if (!plan || !days) return;
+  const token = localStorage.getItem('exon_token');
+  const res   = await fetch('/api/admin/keys/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ plan, days }),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    const el = document.getElementById('adash-gen-result');
+    el.textContent  = data.key;
+    el.style.display = '';
+    navigator.clipboard.writeText(data.key).catch(() => {});
+    adashLoad();
+  }
+}
+
+function adashOpenTime(key) {
+  _adashTimeKey = key;
+  document.getElementById('adash-time-key').textContent  = key;
+  document.getElementById('adash-time-days').value       = '7';
+  document.getElementById('adash-time-modal').style.display = 'flex';
+}
+
+function adashTimeCancel() {
+  document.getElementById('adash-time-modal').style.display = 'none';
+  _adashTimeKey = null;
+}
+
+async function adashTimeSubmit() {
+  const days = parseFloat(document.getElementById('adash-time-days').value);
+  if (!days || !_adashTimeKey) return;
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/keys/${encodeURIComponent(_adashTimeKey)}/add-time`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ minutes: Math.round(days * 1440) }),
+  });
+  document.getElementById('adash-time-modal').style.display = 'none';
+  _adashTimeKey = null;
+  adashLoad();
+}
+
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('adash-time-modal').style.display !== 'none') { adashTimeCancel(); return; }
+  if (document.getElementById('adash-gen-modal').style.display  !== 'none') { adashGenCancel();  return; }
+  if (document.getElementById('admin-dash').style.display       !== 'none') { adashClose();      return; }
 });
 
 

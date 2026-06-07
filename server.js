@@ -722,6 +722,13 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     }
   }
 
+  // Check for banned keys
+  for (const { cf } of cfEntries) {
+    if (cf.banned) {
+      return res.json({ valid: false, reason: 'This account has been suspended. Contact support on Discord.' });
+    }
+  }
+
   // ── Bind HWID to ALL keys immediately (lock against transfer before activation) ──
   await Promise.all(cfEntries.map(async entry => {
     if (!entry.cf.hwid) {
@@ -835,6 +842,114 @@ app.get('/api/check/:discordId', requireAuth, (req, res) => {
   if (!target) return res.status(404).json({ error: 'User not found' });
   const keys = db.getUserKeys(req.params.discordId);
   res.json({ ...target, keys });
+});
+
+// ── Admin middleware ──────────────────────────────────────────────────────────
+
+function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization ?? '';
+  if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Not authenticated' });
+  const payload = verifyToken(auth.slice(7));
+  if (!payload) return res.status(401).json({ error: 'Invalid token' });
+  const user = db.getUser(payload.sub);
+  if (!user || !['staff', 'developer'].includes(user.role)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  req.discordId = payload.sub;
+  next();
+}
+
+// GET /api/admin/keys?q=&page=1&limit=50
+app.get('/api/admin/keys', requireAdmin, async (req, res) => {
+  const q     = (req.query.q ?? '').toLowerCase();
+  const page  = Math.max(1, parseInt(req.query.page  ?? 1));
+  const limit = Math.min(100, parseInt(req.query.limit ?? 50));
+
+  const dbData = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+  let allKeys  = Object.values(dbData.keys ?? {});
+
+  if (q) allKeys = allKeys.filter(k =>
+    k.key_value?.toLowerCase().includes(q) ||
+    k.discord_id?.includes(q) ||
+    (dbData.users?.[k.discord_id]?.username ?? '').toLowerCase().includes(q)
+  );
+
+  allKeys.sort((a, b) => b.created_at - a.created_at);
+  const total = allKeys.length;
+  const slice = allKeys.slice((page - 1) * limit, (page - 1) * limit + limit);
+
+  const enriched = await Promise.all(slice.map(async k => {
+    const cf   = await cfRead(k.key_value);
+    const user = k.discord_id ? (dbData.users?.[k.discord_id] ?? null) : null;
+    const timeCreated = cf?.time_created ?? null;
+    const length      = cf?.length ?? null;
+    const expiresAt   = timeCreated && length ? timeCreated + length * 60000 : null;
+    return {
+      key_value:    k.key_value,
+      plan:         k.plan ?? cf?.plan ?? '—',
+      discord_id:   k.discord_id ?? null,
+      username:     user?.username ?? null,
+      active:       k.active,
+      banned:       cf?.banned ?? false,
+      hwid:         cf?.hwid ?? null,
+      time_created: timeCreated,
+      expires_at:   expiresAt,
+      length_min:   length,
+      purchased_at: cf?.purchased_at ?? null,
+    };
+  }));
+
+  res.json({ keys: enriched, total, page, limit });
+});
+
+// POST /api/admin/keys/generate  { plan, days }
+app.post('/api/admin/keys/generate', requireAdmin, express.json(), async (req, res) => {
+  const { plan, days } = req.body ?? {};
+  if (!plan || !days) return res.status(400).json({ error: 'plan and days required' });
+  const key     = generateKey();
+  const minutes = Math.round(parseFloat(days) * 1440);
+  db.insertKey(key, plan, null, null);
+  await cfWrite(key, {
+    key, discord_id: null, hwid: null, time_created: null,
+    purchased_at: Date.now(), length: minutes, active: false, banned: false,
+  });
+  res.json({ key });
+});
+
+// DELETE /api/admin/keys/:key
+app.delete('/api/admin/keys/:key', requireAdmin, async (req, res) => {
+  db.deleteKey(req.params.key);
+  await cfDelete(req.params.key);
+  res.json({ success: true });
+});
+
+// POST /api/admin/keys/:key/add-time  { minutes }
+app.post('/api/admin/keys/:key/add-time', requireAdmin, express.json(), async (req, res) => {
+  const minutes = parseInt(req.body?.minutes ?? 0);
+  if (!minutes) return res.status(400).json({ error: 'minutes required' });
+  const cf = await cfRead(req.params.key);
+  if (!cf) return res.status(404).json({ error: 'Key not found' });
+  cf.length = (cf.length ?? 0) + minutes;
+  await cfWrite(req.params.key, cf);
+  res.json({ success: true, length_min: cf.length });
+});
+
+// POST /api/admin/keys/:key/ban  { banned }
+app.post('/api/admin/keys/:key/ban', requireAdmin, express.json(), async (req, res) => {
+  const cf = await cfRead(req.params.key);
+  if (!cf) return res.status(404).json({ error: 'Key not found' });
+  cf.banned = !!req.body?.banned;
+  await cfWrite(req.params.key, cf);
+  res.json({ success: true });
+});
+
+// POST /api/admin/keys/:key/reset-hwid
+app.post('/api/admin/keys/:key/reset-hwid', requireAdmin, async (req, res) => {
+  const cf = await cfRead(req.params.key);
+  if (!cf) return res.status(404).json({ error: 'Key not found' });
+  cf.hwid = null;
+  await cfWrite(req.params.key, cf);
+  res.json({ success: true });
 });
 
 // ── API: loader version (auto-updater) ───────────────────────────────────────

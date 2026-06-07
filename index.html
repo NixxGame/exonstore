@@ -7,6 +7,63 @@
   <link rel="icon" type="image/png" href="assets/exon.png">
   <link rel="apple-touch-icon" href="assets/exon.png">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    /* ── ADMIN DASHBOARD ── */
+    .adash-overlay{position:fixed;inset:0;background:rgba(4,5,8,.92);backdrop-filter:blur(8px);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px}
+    .adash-panel{background:#0e1119;border:1px solid rgba(255,255,255,.08);border-radius:16px;width:100%;max-width:1200px;height:85vh;display:flex;flex-direction:column;overflow:hidden;position:relative}
+    .adash-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid rgba(255,255,255,.07);gap:12px;flex-shrink:0}
+    .adash-title{font-size:1rem;font-weight:700;color:#eef0f6;display:flex;align-items:center;gap:8px}
+    .adash-header-right{display:flex;align-items:center;gap:8px}
+    .adash-search{background:#06080d;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:7px 12px;font-size:.83rem;width:210px;outline:none}
+    .adash-search:focus{border-color:rgba(240,122,18,.4)}
+    .adash-search::placeholder{color:#404858}
+    .adash-gen-btn{background:#f07a12;color:#fff;border:none;border-radius:8px;padding:7px 13px;font-size:.83rem;font-weight:600;cursor:pointer}
+    .adash-gen-btn:hover{background:#e06a00}
+    .adash-close-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#7a8394;padding:6px 10px;cursor:pointer;font-size:.9rem;line-height:1}
+    .adash-close-btn:hover{color:#eef0f6;background:rgba(255,255,255,.1)}
+    .adash-table-wrap{flex:1;overflow:auto}
+    .adash-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .adash-table thead th{background:#06080d;color:#7a8394;font-size:.68rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;text-align:left;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:1;white-space:nowrap}
+    .adash-table tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s}
+    .adash-table tbody tr:hover{background:rgba(255,255,255,.03)}
+    .adash-table td{padding:9px 14px;color:#eef0f6;vertical-align:middle;white-space:nowrap}
+    .adash-key-val{font-family:'Courier New',monospace;font-size:.78rem;color:#eef0f6;cursor:pointer;display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+    .adash-key-val:hover{color:#f07a12}
+    .adash-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:.68rem;font-weight:600}
+    .adash-badge.active{background:rgba(16,185,129,.15);color:#10b981}
+    .adash-badge.queued{background:rgba(240,122,18,.12);color:#f07a12}
+    .adash-badge.expired{background:rgba(239,68,68,.12);color:#ef4444}
+    .adash-badge.banned{background:rgba(239,68,68,.2);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+    .adash-badge.unlinked{background:rgba(255,255,255,.06);color:#7a8394}
+    .adash-actions-cell{display:flex;gap:4px;align-items:center}
+    .adash-action-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:6px;color:#7a8394;padding:3px 8px;font-size:.72rem;cursor:pointer;transition:all .12s;white-space:nowrap}
+    .adash-action-btn:hover{background:rgba(255,255,255,.1);color:#eef0f6}
+    .adash-action-btn.danger{color:#ef4444}
+    .adash-action-btn.danger:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3)}
+    .adash-action-btn.warn{color:#f07a12}
+    .adash-action-btn.warn:hover{background:rgba(240,122,18,.12);border-color:rgba(240,122,18,.3)}
+    .adash-footer{display:flex;align-items:center;justify-content:space-between;padding:11px 22px;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0}
+    .adash-pagination{display:flex;align-items:center;gap:10px}
+    .adash-page-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#7a8394;padding:5px 10px;font-size:.78rem;cursor:pointer}
+    .adash-page-btn:hover:not(:disabled){background:rgba(255,255,255,.1);color:#eef0f6}
+    .adash-page-btn:disabled{opacity:.35;cursor:not-allowed}
+    .adash-modal{position:absolute;inset:0;background:rgba(4,5,8,.75);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}
+    .adash-modal-card{background:#0e1119;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:26px;width:320px;display:flex;flex-direction:column;gap:9px}
+    .adash-modal-title{font-size:.95rem;font-weight:700;color:#eef0f6;margin-bottom:2px}
+    .adash-modal-card label{font-size:.7rem;font-weight:600;color:#7a8394;text-transform:uppercase;letter-spacing:.06em}
+    .adash-modal-card input{background:#06080d;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:8px 11px;font-size:.84rem;outline:none;width:100%;box-sizing:border-box}
+    .adash-modal-card input:focus{border-color:rgba(240,122,18,.4)}
+    .adash-modal-actions{display:flex;gap:8px;margin-top:2px}
+    .adash-modal-actions button{flex:1;padding:8px;border-radius:8px;font-size:.84rem;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#eef0f6}
+    .adash-modal-actions button:hover{background:rgba(255,255,255,.1)}
+    .adash-modal-actions button.primary{background:#f07a12;border-color:transparent;color:#fff}
+    .adash-modal-actions button.primary:hover{background:#e06a00}
+    .adash-gen-result{font-size:.8rem;padding:8px 12px;border-radius:8px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:#10b981;font-family:'Courier New',monospace;word-break:break-all}
+    .adash-loading{text-align:center;padding:50px 20px;color:#404858;font-size:.88rem}
+    .adash-user{color:#eef0f6}
+    .profile-admin-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:9px;margin-bottom:8px;border-radius:10px;background:rgba(240,122,18,.1);border:1px solid rgba(240,122,18,.25);color:#f07a12;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .15s}
+    .profile-admin-btn:hover{background:rgba(240,122,18,.18);border-color:rgba(240,122,18,.4)}
+  </style>
 </head>
 <body>
 
@@ -84,6 +141,10 @@
       </div>
       <div id="pc-link-msg" class="profile-link-msg"></div>
 
+      <button id="pc-admin-btn" class="profile-admin-btn" onclick="adashOpen()" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Key Dashboard
+      </button>
       <button class="profile-signout" onclick="signOut()">Sign out</button>
     </div>
   </div>
@@ -581,6 +642,75 @@
 <button id="scroll-top" class="scroll-top-btn" aria-label="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
+
+<!-- ADMIN KEY DASHBOARD -->
+<div id="admin-dash" class="adash-overlay" style="display:none">
+  <div class="adash-panel">
+    <div class="adash-header">
+      <div class="adash-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Key Dashboard
+      </div>
+      <div class="adash-header-right">
+        <input id="adash-search" class="adash-search" type="text" placeholder="Search key or user…" oninput="adashSearch()">
+        <button class="adash-gen-btn" onclick="adashOpenGenModal()">+ Generate Key</button>
+        <button class="adash-close-btn" onclick="adashClose()">✕</button>
+      </div>
+    </div>
+    <div class="adash-table-wrap">
+      <table class="adash-table">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Plan</th>
+            <th>User</th>
+            <th>Status</th>
+            <th>Expires / Duration</th>
+            <th>HWID</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="adash-tbody"><tr><td colspan="7" class="adash-loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="adash-footer">
+      <span id="adash-count" style="color:#7a8394;font-size:.8rem;">— keys</span>
+      <div class="adash-pagination">
+        <button class="adash-page-btn" id="adash-prev" onclick="adashPage(-1)" disabled>← Prev</button>
+        <span id="adash-page-info" style="color:#7a8394;font-size:.8rem;">Page 1</span>
+        <button class="adash-page-btn" id="adash-next" onclick="adashPage(1)" disabled>Next →</button>
+      </div>
+    </div>
+    <!-- Generate Key Modal -->
+    <div id="adash-gen-modal" class="adash-modal" style="display:none">
+      <div class="adash-modal-card">
+        <div class="adash-modal-title">Generate Key</div>
+        <label>Plan Name</label>
+        <input id="adash-gen-plan" type="text" placeholder="e.g. 1 Month">
+        <label>Duration (days)</label>
+        <input id="adash-gen-days" type="number" min="1" value="30">
+        <div class="adash-modal-actions">
+          <button onclick="adashGenCancel()">Cancel</button>
+          <button class="primary" onclick="adashGenSubmit()">Generate</button>
+        </div>
+        <div id="adash-gen-result" class="adash-gen-result" style="display:none"></div>
+      </div>
+    </div>
+    <!-- Add Time Modal -->
+    <div id="adash-time-modal" class="adash-modal" style="display:none">
+      <div class="adash-modal-card">
+        <div class="adash-modal-title">Add Time to Key</div>
+        <div id="adash-time-key" style="font-size:.73rem;color:#7a8394;font-family:monospace;margin-bottom:4px;word-break:break-all"></div>
+        <label>Days to add</label>
+        <input id="adash-time-days" type="number" min="0.1" step="0.5" value="7">
+        <div class="adash-modal-actions">
+          <button onclick="adashTimeCancel()">Cancel</button>
+          <button class="primary" onclick="adashTimeSubmit()">Add Time</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="script.js"></script>
 </body>
