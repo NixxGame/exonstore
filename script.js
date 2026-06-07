@@ -81,6 +81,9 @@ function renderProfileCard(user) {
   document.getElementById('pc-avatar').src           = user.avatar ?? '';
   document.getElementById('pc-username').textContent = user.username;
 
+  const profileLink = document.getElementById('pc-profile-link');
+  if (profileLink) profileLink.href = `/u/${user.discord_id}`;
+
   const adminBtn = document.getElementById('pc-admin-btn');
   if (adminBtn) adminBtn.style.display = ['staff','developer'].includes(user.role) ? '' : 'none';
 
