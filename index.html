@@ -83,6 +83,57 @@
     .adash-up-stats{display:flex;gap:8px;flex-wrap:wrap}
     .profile-admin-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:9px;margin-bottom:8px;border-radius:10px;background:rgba(240,122,18,.1);border:1px solid rgba(240,122,18,.25);color:#f07a12;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .15s}
     .profile-admin-btn:hover{background:rgba(240,122,18,.18);border-color:rgba(240,122,18,.4)}
+
+    /* ── NAV SEARCH ── */
+    .nav-search-wrap{position:relative;display:flex;align-items:center}
+    .nav-search-input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:6px 12px 6px 32px;font-size:.82rem;width:0;opacity:0;transition:width .25s,opacity .25s;outline:none;pointer-events:none}
+    .nav-search-input.open{width:180px;opacity:1;pointer-events:auto}
+    .nav-search-input:focus{border-color:rgba(240,122,18,.4)}
+    .nav-search-input::placeholder{color:#404858}
+    .nav-search-icon{position:absolute;left:8px;color:#7a8394;pointer-events:none;transition:opacity .2s}
+    .nav-search-input.open ~ .nav-search-icon,.nav-search-wrap:focus-within .nav-search-icon{opacity:.5}
+    .nav-search-btn{background:none;border:none;color:#7a8394;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;transition:color .15s}
+    .nav-search-btn:hover{color:#eef0f6}
+    .nav-search-results{position:absolute;top:calc(100% + 8px);left:0;width:260px;background:#0e1119;border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden;z-index:2000;display:none}
+    .nav-search-results.open{display:block}
+    .nav-search-result-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background .1s;text-decoration:none}
+    .nav-search-result-item:hover{background:rgba(255,255,255,.05)}
+    .nav-search-result-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,.08);flex-shrink:0}
+    .nav-search-result-info{flex:1;min-width:0}
+    .nav-search-result-name{font-size:.82rem;color:#eef0f6;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .nav-search-result-handle{font-size:.72rem;color:#7a8394}
+    .nav-search-empty{padding:14px;text-align:center;color:#404858;font-size:.8rem}
+
+    /* ── NOTIFICATION BELL ── */
+    .nav-bell-btn{position:relative;background:none;border:none;color:#7a8394;cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;transition:color .15s}
+    .nav-bell-btn:hover{color:#eef0f6}
+    .nav-bell-badge{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#f07a12;border:2px solid var(--bg-body,#06080d);display:none}
+    .nav-bell-badge.has-unread{display:block}
+    .notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:300px;background:#0e1119;border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;z-index:2000;display:none;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+    .notif-panel.open{display:block}
+    .notif-panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.07)}
+    .notif-panel-title{font-size:.82rem;font-weight:700;color:#eef0f6}
+    .notif-mark-all{background:none;border:none;color:#7a8394;font-size:.72rem;cursor:pointer;padding:2px 6px;border-radius:6px}
+    .notif-mark-all:hover{color:#eef0f6;background:rgba(255,255,255,.07)}
+    .notif-list{max-height:320px;overflow-y:auto}
+    .notif-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s;text-decoration:none}
+    .notif-item:hover{background:rgba(255,255,255,.04)}
+    .notif-item.unread{background:rgba(240,122,18,.04)}
+    .notif-item-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,.08);flex-shrink:0}
+    .notif-item-body{flex:1;min-width:0}
+    .notif-item-msg{font-size:.78rem;color:#eef0f6;line-height:1.4}
+    .notif-item-msg a{color:#f07a12;text-decoration:none}
+    .notif-item-msg a:hover{text-decoration:underline}
+    .notif-item-time{font-size:.68rem;color:#404858;margin-top:2px}
+    .notif-unread-dot{width:6px;height:6px;border-radius:50%;background:#f07a12;flex-shrink:0;margin-top:5px}
+    .notif-empty{padding:20px;text-align:center;color:#404858;font-size:.8rem}
+    .nav-bell-wrap{position:relative}
+
+    /* ── ONLINE PILL ── */
+    .online-pill{position:fixed;bottom:24px;left:24px;display:flex;align-items:center;gap:7px;padding:6px 12px;background:rgba(14,17,25,.9);border:1px solid rgba(255,255,255,.1);border-radius:99px;backdrop-filter:blur(8px);z-index:500;font-size:.75rem;color:#7a8394;cursor:default;transition:opacity .3s}
+    .online-pill-dot{width:7px;height:7px;border-radius:50%;background:#10b981;flex-shrink:0;box-shadow:0 0 6px rgba(16,185,129,.5)}
+    .online-pill-count{font-weight:600;color:#eef0f6}
+    .online-pill-label{color:#404858}
   </style>
 </head>
 <body>
@@ -119,7 +170,30 @@
         </svg>
         Login with Discord
       </a>
+      <!-- nav search -->
+      <div class="nav-search-wrap" id="nav-search-wrap">
+        <button class="nav-search-btn" onclick="navSearchToggle()" aria-label="Search users">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <input id="nav-search-input" class="nav-search-input" type="text" placeholder="Search users…" oninput="navSearchInput()" onblur="navSearchBlur()" autocomplete="off">
+        <div id="nav-search-results" class="nav-search-results"></div>
+      </div>
       <!-- shown when logged in -->
+      <div class="nav-bell-wrap" id="nav-bell-wrap" style="display:none">
+        <button class="nav-bell-btn" onclick="notifToggle()" aria-label="Notifications">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 0 1-6 0v-1m6 0H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="nav-bell-badge" class="nav-bell-badge"></span>
+        </button>
+        <div id="notif-panel" class="notif-panel">
+          <div class="notif-panel-header">
+            <span class="notif-panel-title">Notifications</span>
+            <button class="notif-mark-all" onclick="notifMarkAll()">Mark all read</button>
+          </div>
+          <div id="notif-list" class="notif-list">
+            <div class="notif-empty">No notifications yet.</div>
+          </div>
+        </div>
+      </div>
       <button id="nav-profile-btn" class="nav-profile-btn" style="display:none;" onclick="toggleProfileCard()">
         <img id="nav-avatar" src="" alt="" width="28" height="28">
         <span id="nav-username" class="nav-profile-name"></span>
@@ -183,6 +257,8 @@
       <span id="stat-active-users">—</span> active users
     </div>
   </div>
+
+  <!-- Online pill (fixed bottom-left, injected by JS) -->
 
   <div class="hero-logo-wrap">
     <div class="hero-logo-ring-2"></div>
@@ -741,6 +817,13 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Online pill -->
+<div id="online-pill" class="online-pill" style="display:none">
+  <span class="online-pill-dot"></span>
+  <span class="online-pill-count" id="online-pill-count">0</span>
+  <span class="online-pill-label">online</span>
 </div>
 
 <script src="script.js"></script>

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile — Exon External</title>
+  <link rel="icon" type="image/png" href="/assets/exon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    :root { --accent:#f07a12; --bg-card:#0e1119; --bg-deep:#06080d; --border:rgba(255,255,255,.08); }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;background:#06080d;color:#eef0f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+
+    /* ── NAV ── */
+    .pnav{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--border);background:rgba(6,8,13,.8);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+    .pnav-logo{display:flex;align-items:center;gap:8px;text-decoration:none;color:#eef0f6;font-weight:700;font-size:.95rem}
+    .pnav-logo img{width:24px;height:24px;border-radius:6px}
+    .pnav-right{display:flex;align-items:center;gap:10px}
+    .pnav-back{display:flex;align-items:center;gap:6px;color:#7a8394;font-size:.82rem;text-decoration:none;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.04);transition:all .15s}
+    .pnav-back:hover{color:#eef0f6;background:rgba(255,255,255,.08)}
+    .pnav-auth-avatar{width:30px;height:30px;border-radius:50%;border:2px solid var(--border);cursor:pointer}
+
+    /* ── LAYOUT ── */
+    .prof-wrap{max-width:780px;margin:40px auto;padding:0 20px}
+
+    /* ── PROFILE HEADER CARD ── */
+    .prof-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+    .prof-banner{height:90px;background:linear-gradient(135deg,rgba(240,122,18,.18) 0%,rgba(240,122,18,.04) 100%)}
+    .prof-identity{padding:0 24px 20px;display:flex;flex-direction:column;gap:0}
+    .prof-avatar-row{display:flex;align-items:flex-end;justify-content:space-between;margin-top:-36px;margin-bottom:12px}
+    .prof-avatar{width:72px;height:72px;border-radius:50%;border:4px solid var(--bg-card);object-fit:cover;background:rgba(255,255,255,.08)}
+    .prof-avatar-ph{width:72px;height:72px;border-radius:50%;border:4px solid var(--bg-card);background:rgba(255,255,255,.08)}
+    .prof-actions{display:flex;gap:8px;align-items:center}
+    .prof-btn{padding:7px 16px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,.06);color:#eef0f6;transition:all .15s}
+    .prof-btn:hover{background:rgba(255,255,255,.1)}
+    .prof-btn.primary{background:var(--accent);border-color:transparent;color:#fff}
+    .prof-btn.primary:hover{background:#e06a00}
+    .prof-btn.danger{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08);color:#ef4444}
+    .prof-btn.danger:hover{background:rgba(239,68,68,.15)}
+    .prof-display-name{font-size:1.15rem;font-weight:700;color:#eef0f6;margin-bottom:2px}
+    .prof-handle{font-size:.82rem;color:#7a8394;margin-bottom:8px}
+    .prof-badges{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+    .prof-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;font-size:.68rem;font-weight:700;letter-spacing:.03em}
+    .prof-badge.early_supporter{background:rgba(240,122,18,.15);color:#f07a12;border:1px solid rgba(240,122,18,.25)}
+    .prof-badge\.1_year_member,.prof-badge[data-badge="1_year_member"]{background:rgba(234,179,8,.12);color:#eab308;border:1px solid rgba(234,179,8,.25)}
+    .prof-badge.verified{background:rgba(59,130,246,.12);color:#3b82f6;border:1px solid rgba(59,130,246,.25)}
+    .prof-badge.staff{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+    .prof-badge.developer{background:rgba(139,92,246,.12);color:#8b5cf6;border:1px solid rgba(139,92,246,.25)}
+    .prof-badge.vip{background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25)}
+    .prof-badge.tester{background:rgba(6,182,212,.12);color:#06b6d4;border:1px solid rgba(6,182,212,.25)}
+    .prof-badge.og{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.25)}
+    .prof-bio{font-size:.84rem;color:#a0a8b8;line-height:1.55;margin-bottom:14px}
+    .prof-stats-row{display:flex;gap:20px;flex-wrap:wrap}
+    .prof-stat{font-size:.82rem;color:#7a8394}
+    .prof-stat a{color:#eef0f6;font-weight:600;text-decoration:none}
+    .prof-stat a:hover{color:var(--accent)}
+    .prof-stat span{color:#eef0f6;font-weight:600}
+    .prof-role-chip{display:inline-flex;padding:2px 9px;border-radius:99px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+    .prof-role-chip[data-role="developer"]{background:rgba(139,92,246,.12);color:#8b5cf6}
+    .prof-role-chip[data-role="staff"]{background:rgba(16,185,129,.12);color:#10b981}
+    .prof-role-chip[data-role="customer"]{background:rgba(240,122,18,.12);color:#f07a12}
+    .prof-role-chip[data-role="member"]{background:rgba(255,255,255,.06);color:#7a8394}
+    .prof-online-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin-right:4px;vertical-align:middle;box-shadow:0 0 5px rgba(16,185,129,.5)}
+    .prof-last-seen{font-size:.75rem;color:#404858;margin-top:4px}
+
+    /* ── TABS (followers/following pages) ── */
+    .prof-page-title{font-size:1rem;font-weight:700;color:#eef0f6;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+    .prof-page-title a{color:#7a8394;font-size:.82rem;font-weight:400;text-decoration:none}
+    .prof-page-title a:hover{color:#eef0f6}
+
+    /* ── USER LIST (followers/following) ── */
+    .user-list{display:flex;flex-direction:column;gap:8px;margin-top:24px}
+    .user-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;text-decoration:none;color:#eef0f6;transition:background .15s}
+    .user-list-item:hover{background:rgba(255,255,255,.04)}
+    .user-list-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,.08);flex-shrink:0}
+    .user-list-info{flex:1;min-width:0}
+    .user-list-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .user-list-handle{font-size:.73rem;color:#7a8394}
+    .user-list-badges{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+
+    /* ── EDIT PROFILE PANEL ── */
+    .edit-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px}
+    .edit-panel-title{font-size:.9rem;font-weight:700;color:#eef0f6;margin-bottom:16px}
+    .edit-field{margin-bottom:14px}
+    .edit-label{font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7a8394;margin-bottom:5px;display:block}
+    .edit-input{width:100%;background:var(--bg-deep);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:9px 12px;font-size:.85rem;outline:none}
+    .edit-input:focus{border-color:rgba(240,122,18,.4)}
+    .edit-input::placeholder{color:#404858}
+    textarea.edit-input{resize:vertical;min-height:80px;font-family:inherit}
+    .edit-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+    .edit-toggle-label{font-size:.83rem;color:#a0a8b8}
+    .edit-toggle-desc{font-size:.72rem;color:#404858;margin-top:1px}
+    .toggle{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+    .toggle input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;inset:0;background:#1a1f2e;border-radius:99px;transition:.2s;cursor:pointer;border:1px solid rgba(255,255,255,.1)}
+    .toggle-slider::before{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#7a8394;left:2px;top:2px;transition:.2s}
+    .toggle input:checked+.toggle-slider{background:rgba(240,122,18,.2);border-color:rgba(240,122,18,.4)}
+    .toggle input:checked+.toggle-slider::before{transform:translateX(16px);background:var(--accent)}
+    .edit-save-row{display:flex;justify-content:flex-end;margin-top:16px;gap:8px}
+    .edit-msg{font-size:.78rem;color:#10b981;align-self:center}
+    .edit-msg.err{color:#ef4444}
+
+    /* ── LOADING / ERROR ── */
+    .pload{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:12px;color:#404858}
+    .pload-spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .perr{text-align:center;padding:60px 20px;color:#404858;font-size:.88rem}
+    .perr h2{color:#7a8394;font-size:1.2rem;margin-bottom:8px}
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="pnav">
+  <a href="/" class="pnav-logo">
+    <img src="/assets/exon.png" alt="Exon">
+    Exon External
+  </a>
+  <div class="pnav-right">
+    <a href="/" class="pnav-back">← Back</a>
+    <img id="pnav-avatar" class="pnav-auth-avatar" src="" alt="" style="display:none" onclick="window.location='/'">
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="prof-wrap" id="prof-wrap">
+  <div class="pload"><div class="pload-spinner"></div><span>Loading profile…</span></div>
+</div>
+
+<script>
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function relTime(ts) {
+  if (!ts) return null;
+  const diff = Date.now() - ts;
+  if (diff < 60000)       return 'Online now';
+  if (diff < 3600000)     return `${Math.floor(diff/60000)}m ago`;
+  if (diff < 86400000)    return `${Math.floor(diff/3600000)}h ago`;
+  if (diff < 2592000000)  return `${Math.floor(diff/86400000)}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
+const BADGE_META = {
+  early_supporter:  { label:'Early Supporter', emoji:'⭐' },
+  '1_year_member':  { label:'1 Year Member',   emoji:'🎂' },
+  verified:         { label:'Verified',         emoji:'✓'  },
+  staff:            { label:'Staff',            emoji:'🛡' },
+  developer:        { label:'Developer',        emoji:'⚒' },
+  vip:              { label:'VIP',              emoji:'👑' },
+  tester:           { label:'Beta Tester',      emoji:'🧪' },
+  og:               { label:'OG Member',        emoji:'🏆' },
+};
+
+function badgeHtml(badge) {
+  const m = BADGE_META[badge] ?? { label: badge, emoji: '•' };
+  const cls = badge.replace('_','-');
+  return `<span class="prof-badge ${badge}" data-badge="${badge}">${m.emoji} ${m.label}</span>`;
+}
+
+// ── Route detection ───────────────────────────────────────────────────────────
+
+const pathParts = window.location.pathname.split('/').filter(Boolean);
+// /u/:id  or  /u/:id/followers  or  /u/:id/following
+const targetId  = pathParts[1] ?? null;
+const subpage   = pathParts[2] ?? null; // 'followers' | 'following' | undefined
+
+const token       = localStorage.getItem('exon_token');
+let   selfProfile = null;
+
+// Show self avatar in nav if logged in
+if (token) {
+  fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : null)
+    .then(u => {
+      if (!u) return;
+      selfProfile = u;
+      const av = document.getElementById('pnav-avatar');
+      av.src   = u.avatar ?? '';
+      av.style.display = 'block';
+    }).catch(() => {});
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+
+async function init() {
+  if (!targetId) {
+    renderError('No user specified.');
+    return;
+  }
+
+  if (subpage === 'followers' || subpage === 'following') {
+    await renderListPage(subpage);
+    return;
+  }
+
+  await renderProfilePage();
+}
+
+async function renderProfilePage() {
+  const wrap = document.getElementById('prof-wrap');
+  try {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res     = await fetch(`/api/profile/${encodeURIComponent(targetId)}`, { headers });
+    if (res.status === 404) { renderError('This user does not exist.'); return; }
+    const u = await res.json();
+
+    document.title = `${u.display_name} — Exon External`;
+
+    const isOwner    = u.is_owner ?? false;
+    const isSelf     = isOwner;
+    const lastSeen   = u.last_seen ? relTime(u.last_seen) : null;
+    const isOnline   = u.last_seen && (Date.now() - u.last_seen) < 5 * 60 * 1000;
+
+    const avatarHtml = u.avatar
+      ? `<img src="${escHtml(u.avatar)}" class="prof-avatar" alt="">`
+      : `<div class="prof-avatar-ph"></div>`;
+
+    const badgesHtml = (u.badges ?? []).map(badgeHtml).join('');
+
+    const followersHtml = u.show_follower_count
+      ? `<a href="/u/${escHtml(targetId)}/followers">${u.follower_count} follower${u.follower_count !== 1 ? 's' : ''}</a>`
+      : `<span>${u.follower_count} follower${u.follower_count !== 1 ? 's' : ''}</span>`;
+
+    const followingHtml = u.show_follower_count
+      ? `<a href="/u/${escHtml(targetId)}/following">${u.following_count} following</a>`
+      : `<span>${u.following_count} following</span>`;
+
+    let actionHtml = '';
+    if (!isSelf && token) {
+      if (u.is_following) {
+        actionHtml = `<button class="prof-btn" id="follow-btn" onclick="unfollow()">Following</button>`;
+      } else {
+        actionHtml = `<button class="prof-btn primary" id="follow-btn" onclick="follow()">Follow</button>`;
+      }
+      actionHtml += `<button class="prof-btn danger" onclick="block()">Block</button>`;
+    }
+    if (isSelf) {
+      actionHtml = `<button class="prof-btn" onclick="toggleEdit()">Edit Profile</button>`;
+    }
+
+    const onlineHtml = lastSeen
+      ? `<div class="prof-last-seen">${isOnline ? '<span class="prof-online-dot"></span>Online now' : 'Last seen ' + lastSeen}</div>`
+      : '';
+
+    wrap.innerHTML = `
+      <div class="prof-card">
+        <div class="prof-banner"></div>
+        <div class="prof-identity">
+          <div class="prof-avatar-row">
+            ${avatarHtml}
+            <div class="prof-actions">${actionHtml}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
+            <div class="prof-display-name">${escHtml(u.display_name)}</div>
+            <span class="prof-role-chip" data-role="${escHtml(u.role)}">${escHtml(u.role)}</span>
+          </div>
+          <div class="prof-handle">@${escHtml(u.username)}</div>
+          ${badgesHtml ? `<div class="prof-badges">${badgesHtml}</div>` : ''}
+          ${u.bio ? `<div class="prof-bio">${escHtml(u.bio)}</div>` : ''}
+          <div class="prof-stats-row">
+            <div class="prof-stat">${followersHtml}</div>
+            <div class="prof-stat">${followingHtml}</div>
+          </div>
+          ${onlineHtml}
+        </div>
+      </div>
+      ${isSelf ? editPanelHtml(u) : ''}
+    `;
+
+    if (isSelf) wireEditPanel(u);
+
+  } catch(e) {
+    renderError('Failed to load profile.');
+  }
+}
+
+function editPanelHtml(u) {
+  const p = u.privacy ?? {};
+  function toggle(key, label, desc) {
+    return `<div class="edit-toggle-row">
+      <div><div class="edit-toggle-label">${label}</div><div class="edit-toggle-desc">${desc}</div></div>
+      <label class="toggle"><input type="checkbox" id="priv-${key}" ${p[key] ? 'checked' : ''}><span class="toggle-slider"></span></label>
+    </div>`;
+  }
+  return `<div class="edit-panel" id="edit-panel" style="display:none">
+    <div class="edit-panel-title">Edit Profile</div>
+    <div class="edit-field">
+      <label class="edit-label">Display Name</label>
+      <input class="edit-input" id="edit-display-name" type="text" maxlength="32" placeholder="Your display name" value="${escHtml(u.display_name ?? u.username)}">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">Bio</label>
+      <textarea class="edit-input" id="edit-bio" maxlength="200" placeholder="Tell others about yourself">${escHtml(u.bio ?? '')}</textarea>
+    </div>
+    <div class="edit-panel-title" style="margin-top:8px;font-size:.8rem;color:#7a8394">Privacy</div>
+    ${toggle('show_subscription',   'Show subscription status', 'Display whether you have an active subscription')}
+    ${toggle('show_time_remaining', 'Show time remaining',      'Show how much time is left on your subscription')}
+    ${toggle('show_key_count',      'Show key count',           'Show how many keys you have linked')}
+    ${toggle('show_follower_count', 'Show follower count & lists', 'Allow others to see your follower/following lists')}
+    ${toggle('show_online_status',  'Show online status',       'Let others see when you were last online')}
+    <div class="edit-save-row">
+      <span id="edit-msg" class="edit-msg"></span>
+      <button class="prof-btn" onclick="toggleEdit()">Cancel</button>
+      <button class="prof-btn primary" onclick="saveProfile()">Save</button>
+    </div>
+  </div>`;
+}
+
+function wireEditPanel(u) {}
+
+function toggleEdit() {
+  const panel = document.getElementById('edit-panel');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveProfile() {
+  const displayName = document.getElementById('edit-display-name')?.value?.trim();
+  const bio         = document.getElementById('edit-bio')?.value?.trim();
+  const privacyKeys = ['show_subscription','show_time_remaining','show_key_count','show_follower_count','show_online_status'];
+  const privacy     = {};
+  privacyKeys.forEach(k => {
+    const el = document.getElementById(`priv-${k}`);
+    if (el) privacy[k] = el.checked;
+  });
+  const msgEl = document.getElementById('edit-msg');
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ display_name: displayName, bio, privacy }),
+    });
+    if (res.ok) {
+      if (msgEl) { msgEl.textContent = 'Saved!'; msgEl.className = 'edit-msg'; }
+      setTimeout(() => renderProfilePage(), 800);
+    } else {
+      const d = await res.json();
+      if (msgEl) { msgEl.textContent = d.error ?? 'Error'; msgEl.className = 'edit-msg err'; }
+    }
+  } catch {
+    if (msgEl) { msgEl.textContent = 'Network error'; msgEl.className = 'edit-msg err'; }
+  }
+}
+
+async function follow() {
+  const btn = document.getElementById('follow-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch(`/api/follow/${encodeURIComponent(targetId)}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      if (btn) { btn.textContent = 'Following'; btn.className = 'prof-btn'; btn.onclick = unfollow; btn.disabled = false; }
+    } else {
+      if (btn) { btn.textContent = 'Follow'; btn.disabled = false; }
+    }
+  } catch {
+    if (btn) { btn.textContent = 'Follow'; btn.disabled = false; }
+  }
+}
+
+async function unfollow() {
+  const btn = document.getElementById('follow-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await fetch(`/api/follow/${encodeURIComponent(targetId)}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    });
+    if (btn) { btn.textContent = 'Follow'; btn.className = 'prof-btn primary'; btn.onclick = follow; btn.disabled = false; }
+  } catch {
+    if (btn) { btn.textContent = 'Following'; btn.disabled = false; }
+  }
+}
+
+async function block() {
+  if (!confirm('Block this user? They will no longer be able to see your profile.')) return;
+  try {
+    await fetch(`/api/block/${encodeURIComponent(targetId)}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    });
+    alert('User blocked.');
+    window.location.href = '/';
+  } catch {}
+}
+
+async function renderListPage(type) {
+  const wrap = document.getElementById('prof-wrap');
+  wrap.innerHTML = '<div class="pload"><div class="pload-spinner"></div></div>';
+  try {
+    const endpoint = type === 'followers'
+      ? `/api/followers/${encodeURIComponent(targetId)}`
+      : `/api/following/${encodeURIComponent(targetId)}`;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res     = await fetch(endpoint, { headers });
+    if (res.status === 403) {
+      renderError('This list is private.');
+      return;
+    }
+    if (!res.ok) { renderError('Could not load list.'); return; }
+    const data  = await res.json();
+    const items = data.followers ?? data.following ?? [];
+
+    document.title = `${type === 'followers' ? 'Followers' : 'Following'} — Exon External`;
+
+    const listHtml = items.length
+      ? items.map(u => `
+        <a class="user-list-item" href="/u/${escHtml(u.discord_id)}">
+          ${u.avatar ? `<img src="${escHtml(u.avatar)}" class="user-list-avatar" alt="">` : '<div class="user-list-avatar"></div>'}
+          <div class="user-list-info">
+            <div class="user-list-name">${escHtml(u.display_name || u.username)}</div>
+            <div class="user-list-handle">@${escHtml(u.username)}</div>
+            ${(u.badges ?? []).length ? `<div class="user-list-badges">${u.badges.slice(0,3).map(b=>`<span class="prof-badge ${b}" data-badge="${b}" style="font-size:.6rem">${(BADGE_META[b]?.emoji ?? '•')} ${BADGE_META[b]?.label ?? b}</span>`).join('')}</div>` : ''}
+          </div>
+          <span class="prof-role-chip" data-role="${escHtml(u.role)}" style="font-size:.65rem">${escHtml(u.role)}</span>
+        </a>`).join('')
+      : '<div class="perr"><h2>No one here yet.</h2></div>';
+
+    wrap.innerHTML = `
+      <div class="prof-page-title">
+        ${type === 'followers' ? 'Followers' : 'Following'}
+        <a href="/u/${escHtml(targetId)}">← Back to profile</a>
+      </div>
+      <div class="user-list">${listHtml}</div>
+    `;
+  } catch {
+    renderError('Failed to load list.');
+  }
+}
+
+function renderError(msg) {
+  document.getElementById('prof-wrap').innerHTML = `<div class="perr"><h2>Oops</h2><p>${escHtml(msg)}</p><br><a href="/" style="color:var(--accent)">← Go home</a></div>`;
+}
+
+init();
+</script>
+</body>
+</html>

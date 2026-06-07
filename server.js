@@ -10,16 +10,74 @@
 
 require('dotenv').config();
 
-const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
-const axios   = require('axios');
-const jwt     = require('jsonwebtoken');
+const express   = require('express');
+const cors      = require('cors');
+const path      = require('path');
+const axios     = require('axios');
+const jwt       = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const stripe     = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const stripeTest = process.env.STRIPE_SECRET_KEY_TEST
   ? require('stripe')(process.env.STRIPE_SECRET_KEY_TEST)
   : stripe;
 const db      = require('./db');
+
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+const strictLimit   = rateLimit({ windowMs: 60000, max: 10,  standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests, slow down.' } });
+const standardLimit = rateLimit({ windowMs: 60000, max: 60,  standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } });
+const looseLimit    = rateLimit({ windowMs: 60000, max: 120, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } });
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function sanitizeText(str, maxLen) {
+  return String(str ?? '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '').trim().slice(0, maxLen);
+}
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+const VALID_BADGES = ['early_supporter', 'beta_tester', 'og'];
+const BADGE_LABELS = { early_supporter: 'Early Supporter', beta_tester: 'Beta Tester', og: 'OG', '1_year_member': '1 Year Member' };
+
+function hasOneYear(createdAt) {
+  return createdAt && Date.now() - createdAt * 1000 >= 365 * 24 * 60 * 60 * 1000;
+}
+
+async function sendDiscordDM(discordId, content) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken) return;
+  try {
+    const dm = await axios.post(
+      'https://discord.com/api/v10/users/@me/channels',
+      { recipient_id: discordId },
+      { headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' } }
+    );
+    await axios.post(
+      `https://discord.com/api/v10/channels/${dm.data.id}/messages`,
+      { content },
+      { headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' } }
+    );
+  } catch (err) {
+    console.error('DM error:', err.response?.data ?? err.message);
+  }
+}
+
+async function addNotification(discordId, notification) {
+  const cfUser = await cfRead(`user:${discordId}`);
+  if (!cfUser) return;
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const notifications = (cfUser.notifications ?? []).filter(n => n.created_at > thirtyDaysAgo);
+  notifications.unshift({ id: genId(), ...notification, created_at: Date.now(), read: false });
+  cfUser.notifications = notifications.slice(0, 100);
+  await cfWrite(`user:${discordId}`, cfUser);
+}
+
+async function updateLastSeen(discordId) {
+  const cfUser = await cfRead(`user:${discordId}`);
+  if (cfUser) { cfUser.last_seen = Date.now(); await cfWrite(`user:${discordId}`, cfUser); }
+  db.setLastSeen(discordId);
+}
 
 // ── Role helpers ──────────────────────────────────────────────────────────────
 
@@ -475,7 +533,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 
 // ── API: public stats ─────────────────────────────────────────────────────────
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', looseLimit, (req, res) => {
   const data   = require('./db');
   const keys   = Object.values(require('fs').existsSync('./data/db.json')
     ? JSON.parse(require('fs').readFileSync('./data/db.json')).keys : {});
@@ -521,12 +579,15 @@ async function getHighestDiscordRole(discordId) {
   }
 }
 
-app.get('/api/me', requireAuth, async (req, res) => {
+app.get('/api/me', standardLimit, requireAuth, async (req, res) => {
   let user = db.getUser(req.discordId);
 
   // Server restarted and wiped local db — restore from CF KV
   if (!user) user = await restoreUserFromCF(req.discordId);
   if (!user) return res.status(404).json({ error: 'User not found' });
+
+  // Update last_seen (fire and forget)
+  updateLastSeen(req.discordId).catch(() => {});
 
   const keys = db.getUserKeys(req.discordId);
 
@@ -608,7 +669,7 @@ app.get('/api/key/:keyValue', requireAuth, async (req, res) => {
 
 // ── API: link key ─────────────────────────────────────────────────────────────
 
-app.post('/api/link-key', requireAuth, express.json(), async (req, res) => {
+app.post('/api/link-key', strictLimit, requireAuth, express.json(), async (req, res) => {
   const { key } = req.body ?? {};
   if (!key) return res.status(400).json({ error: 'Key is required' });
 
@@ -794,6 +855,9 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
     return { key_value: k.key_value, plan: k.plan ?? cf.plan ?? 'License', status, expires_ms: expiresMs };
   });
 
+  // Update last_seen (fire and forget)
+  updateLastSeen(discord_id).catch(() => {});
+
   console.log(`Loader verify OK for ${discord_id} — ${combinedMs / 60000 | 0}m combined remaining`);
 
   return res.json({
@@ -807,7 +871,7 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
 
 // ── API: reset HWID ───────────────────────────────────────────────────────────
 
-app.post('/api/reset-hwid', requireAuth, express.json(), async (req, res) => {
+app.post('/api/reset-hwid', strictLimit, requireAuth, express.json(), async (req, res) => {
   const { key_value } = req.body ?? {};
   if (!key_value) return res.status(400).json({ error: 'key_value required' });
 
@@ -1010,12 +1074,370 @@ app.post('/api/admin/users/:discordId/ban', requireAdmin, express.json(), async 
 // Loader checks this on every launch. Change LOADER_VERSION + LOADER_DOWNLOAD_URL
 // in your .env to push an update to all clients automatically.
 
-app.get('/api/loader/version', (req, res) => {
+app.get('/api/loader/version', looseLimit, (req, res) => {
+  const auth = req.headers.authorization ?? '';
+  if (auth !== `Bearer ${process.env.LOADER_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   res.json({
     version: process.env.LOADER_VERSION       ?? '1.0.0',
     url:     process.env.LOADER_DOWNLOAD_URL  ?? '',
     size_mb: process.env.LOADER_SIZE_MB       ?? '',
   });
+});
+
+// ── Profile pages (/u/ routes) ───────────────────────────────────────────────
+
+app.get('/u/:discordId', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/u/:discordId/followers', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/u/:discordId/following', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+
+// ── API: public profile ───────────────────────────────────────────────────────
+
+app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
+  const cfUser = await cfRead(`user:${req.params.discordId}`);
+  const dbUser = db.getUser(req.params.discordId);
+  if (!cfUser && !dbUser) return res.status(404).json({ error: 'User not found' });
+
+  const user    = { ...(dbUser ?? {}), ...(cfUser ?? {}) };
+  const privacy = user.privacy ?? {};
+
+  // Identify requester
+  const authHeader = (req.headers.authorization ?? '').replace('Bearer ', '');
+  const payload    = authHeader ? verifyToken(authHeader) : null;
+  const requesterId = payload?.sub ?? null;
+  const isOwner    = requesterId === req.params.discordId;
+
+  // Block check — blocked users see 404
+  if (!isOwner && requesterId && (user.blocked ?? []).includes(requesterId)) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  // Auto badge: 1 year member
+  const autoBadges = hasOneYear(user.created_at) ? ['1_year_member'] : [];
+  const allBadges  = [...new Set([...(user.badges ?? []), ...autoBadges])];
+
+  const base = {
+    discord_id:      user.discord_id,
+    username:        user.username,
+    display_name:    user.display_name ?? user.username,
+    avatar:          user.avatar,
+    bio:             user.bio ?? '',
+    role:            user.role ?? 'member',
+    created_at:      user.created_at,
+    badges:          allBadges,
+    follower_count:  (user.followers ?? []).length,
+    following_count: (user.following ?? []).length,
+    show_follower_count: privacy.show_follower_count ?? false,
+    is_owner:        isOwner,
+    is_following:    requesterId ? (user.followers ?? []).includes(requesterId) : false,
+    is_blocked_by_you: requesterId ? (user.blocked ?? []).includes(requesterId) : false,
+    last_seen:       (privacy.show_online_status && user.last_seen) ? user.last_seen : null,
+  };
+
+  if (isOwner) {
+    // Owner: full data
+    const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+    const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
+    const enriched = await Promise.all(userKeys.map(async k => {
+      const cf = await cfRead(k.key_value);
+      const tc = cf?.time_created ?? null;
+      const ln = cf?.length ?? null;
+      return { key_value: k.key_value, plan: k.plan ?? '—', hwid: cf?.hwid ?? null,
+               time_created: tc, expires_at: tc && ln ? tc + ln * 60000 : null,
+               length_min: ln, purchased_at: cf?.purchased_at ?? null };
+    }));
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const notifications = (user.notifications ?? []).filter(n => n.created_at > thirtyDaysAgo);
+    return res.json({
+      ...base,
+      privacy,
+      keys:             enriched,
+      notifications:    notifications,
+      unread_count:     notifications.filter(n => !n.read).length,
+      following:        user.following ?? [],
+      blocked:          user.blocked ?? [],
+      last_seen:        user.last_seen ?? null, // owner always sees their own
+    });
+  }
+
+  // Public view — apply privacy filters
+  const pub = { ...base };
+  if (privacy.show_subscription) {
+    const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+    const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
+    const cfKeys   = await Promise.all(userKeys.map(k => cfRead(k.key_value)));
+    pub.has_active_subscription = cfKeys.some(cf => cf?.time_created && cf?.length && Date.now() < cf.time_created + cf.length * 60000);
+  }
+  if (privacy.show_time_remaining) {
+    const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+    const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
+    let combinedMs = 0;
+    for (const k of userKeys) {
+      const cf = await cfRead(k.key_value);
+      if (cf?.time_created && cf?.length) {
+        const rem = cf.time_created + cf.length * 60000 - Date.now();
+        if (rem > 0) combinedMs += rem;
+      } else if (cf?.length && !cf?.time_created) combinedMs += cf.length * 60000;
+    }
+    pub.time_remaining_ms = combinedMs;
+  }
+  if (privacy.show_key_count) {
+    const dbData = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+    pub.key_count = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId).length;
+  }
+  res.json(pub);
+});
+
+// ── API: update profile ───────────────────────────────────────────────────────
+
+app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, res) => {
+  const { display_name, bio, privacy } = req.body ?? {};
+  const cfUser = await cfRead(`user:${req.discordId}`);
+  if (!cfUser) return res.status(404).json({ error: 'User not found' });
+
+  if (display_name !== undefined) cfUser.display_name = sanitizeText(display_name, 32);
+  if (bio !== undefined)          cfUser.bio           = sanitizeText(bio, 200);
+  if (privacy && typeof privacy === 'object') {
+    const allowed = ['show_subscription','show_time_remaining','show_key_count','show_follower_count','show_online_status'];
+    cfUser.privacy = cfUser.privacy ?? {};
+    allowed.forEach(k => { if (k in privacy) cfUser.privacy[k] = !!privacy[k]; });
+  }
+  await cfWrite(`user:${req.discordId}`, cfUser);
+  res.json({ success: true });
+});
+
+// ── API: follow / unfollow ────────────────────────────────────────────────────
+
+app.post('/api/follow/:discordId', strictLimit, requireAuth, async (req, res) => {
+  const targetId = req.params.discordId;
+  if (targetId === req.discordId) return res.status(400).json({ error: 'Cannot follow yourself' });
+
+  const [cfTarget, cfSelf] = await Promise.all([
+    cfRead(`user:${targetId}`),
+    cfRead(`user:${req.discordId}`),
+  ]);
+  if (!cfTarget) return res.status(404).json({ error: 'User not found' });
+  if ((cfTarget.blocked ?? []).includes(req.discordId)) return res.status(403).json({ error: 'Cannot follow this user' });
+
+  const followers = cfTarget.followers ?? [];
+  if (followers.includes(req.discordId)) return res.json({ success: true }); // already following
+
+  cfTarget.followers = [...followers, req.discordId];
+  if (cfSelf) cfSelf.following = [...new Set([...(cfSelf.following ?? []), targetId])];
+
+  await Promise.all([
+    cfWrite(`user:${targetId}`, cfTarget),
+    cfSelf ? cfWrite(`user:${req.discordId}`, cfSelf) : Promise.resolve(),
+  ]);
+
+  // Notification
+  const selfUser = db.getUser(req.discordId) ?? cfSelf;
+  const displayName = cfSelf?.display_name ?? selfUser?.username ?? 'Someone';
+  await addNotification(targetId, {
+    type: 'follow',
+    from_discord_id: req.discordId,
+    from_username:   selfUser?.username ?? '',
+    from_display_name: displayName,
+    message: `${displayName} followed you!`,
+  });
+
+  // Discord DM (fire and forget)
+  const profileUrl = `${process.env.SITE_URL}/u/${req.discordId}`;
+  sendDiscordDM(targetId, `**[${displayName}](${profileUrl})** followed you on Exon External!`).catch(() => {});
+
+  res.json({ success: true });
+});
+
+app.delete('/api/follow/:discordId', strictLimit, requireAuth, async (req, res) => {
+  const targetId = req.params.discordId;
+  const [cfTarget, cfSelf] = await Promise.all([
+    cfRead(`user:${targetId}`),
+    cfRead(`user:${req.discordId}`),
+  ]);
+
+  if (cfTarget) {
+    cfTarget.followers = (cfTarget.followers ?? []).filter(id => id !== req.discordId);
+    await cfWrite(`user:${targetId}`, cfTarget);
+  }
+  if (cfSelf) {
+    cfSelf.following = (cfSelf.following ?? []).filter(id => id !== targetId);
+    await cfWrite(`user:${req.discordId}`, cfSelf);
+  }
+  res.json({ success: true });
+});
+
+// ── API: followers / following lists ─────────────────────────────────────────
+
+async function buildUserList(ids) {
+  return Promise.all(ids.map(async id => {
+    const cf = await cfRead(`user:${id}`);
+    const db_ = db.getUser(id);
+    const u = { ...(db_ ?? {}), ...(cf ?? {}) };
+    return {
+      discord_id:   id,
+      username:     u.username ?? '—',
+      display_name: u.display_name ?? u.username ?? '—',
+      avatar:       u.avatar ?? null,
+      role:         u.role ?? 'member',
+      badges:       [...(u.badges ?? []), ...(hasOneYear(u.created_at) ? ['1_year_member'] : [])],
+    };
+  }));
+}
+
+app.get('/api/followers/:discordId', looseLimit, async (req, res) => {
+  const cfUser  = await cfRead(`user:${req.params.discordId}`);
+  if (!cfUser) return res.status(404).json({ error: 'User not found' });
+  const privacy = cfUser.privacy ?? {};
+  if (!privacy.show_follower_count) return res.status(403).json({ error: 'Follower list is private' });
+
+  // Block check
+  const auth    = (req.headers.authorization ?? '').replace('Bearer ', '');
+  const payload = auth ? verifyToken(auth) : null;
+  const requesterId = payload?.sub ?? null;
+  if (requesterId && (cfUser.blocked ?? []).includes(requesterId)) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const list = await buildUserList(cfUser.followers ?? []);
+  res.json({ followers: list });
+});
+
+app.get('/api/following/:discordId', looseLimit, async (req, res) => {
+  const cfUser  = await cfRead(`user:${req.params.discordId}`);
+  if (!cfUser) return res.status(404).json({ error: 'User not found' });
+  const privacy = cfUser.privacy ?? {};
+  if (!privacy.show_follower_count) return res.status(403).json({ error: 'Following list is private' });
+
+  const auth    = (req.headers.authorization ?? '').replace('Bearer ', '');
+  const payload = auth ? verifyToken(auth) : null;
+  const requesterId = payload?.sub ?? null;
+  if (requesterId && (cfUser.blocked ?? []).includes(requesterId)) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const list = await buildUserList(cfUser.following ?? []);
+  res.json({ following: list });
+});
+
+// ── API: block / unblock ──────────────────────────────────────────────────────
+
+app.post('/api/block/:discordId', strictLimit, requireAuth, async (req, res) => {
+  const targetId = req.params.discordId;
+  if (targetId === req.discordId) return res.status(400).json({ error: 'Cannot block yourself' });
+
+  const [cfSelf, cfTarget] = await Promise.all([
+    cfRead(`user:${req.discordId}`),
+    cfRead(`user:${targetId}`),
+  ]);
+  if (!cfSelf) return res.status(404).json({ error: 'User not found' });
+
+  // Add block
+  cfSelf.blocked = [...new Set([...(cfSelf.blocked ?? []), targetId])];
+  // Remove them from your followers and you from their following
+  cfSelf.followers = (cfSelf.followers ?? []).filter(id => id !== targetId);
+  if (cfTarget) {
+    cfTarget.following = (cfTarget.following ?? []).filter(id => id !== req.discordId);
+    await cfWrite(`user:${targetId}`, cfTarget);
+  }
+  await cfWrite(`user:${req.discordId}`, cfSelf);
+  res.json({ success: true });
+});
+
+app.delete('/api/block/:discordId', strictLimit, requireAuth, async (req, res) => {
+  const cfSelf = await cfRead(`user:${req.discordId}`);
+  if (!cfSelf) return res.status(404).json({ error: 'User not found' });
+  cfSelf.blocked = (cfSelf.blocked ?? []).filter(id => id !== req.params.discordId);
+  await cfWrite(`user:${req.discordId}`, cfSelf);
+  res.json({ success: true });
+});
+
+// ── API: notifications ────────────────────────────────────────────────────────
+
+app.get('/api/notifications', standardLimit, requireAuth, async (req, res) => {
+  const cfUser = await cfRead(`user:${req.discordId}`);
+  if (!cfUser) return res.json({ notifications: [], unread_count: 0 });
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const notifications  = (cfUser.notifications ?? []).filter(n => n.created_at > thirtyDaysAgo);
+  res.json({ notifications, unread_count: notifications.filter(n => !n.read).length });
+});
+
+app.post('/api/notifications/read', standardLimit, requireAuth, express.json(), async (req, res) => {
+  const { id } = req.body ?? {}; // if no id, mark all read
+  const cfUser = await cfRead(`user:${req.discordId}`);
+  if (!cfUser) return res.json({ success: true });
+  cfUser.notifications = (cfUser.notifications ?? []).map(n => ({
+    ...n, read: id ? (n.id === id ? true : n.read) : true,
+  }));
+  await cfWrite(`user:${req.discordId}`, cfUser);
+  res.json({ success: true });
+});
+
+// ── API: user search ──────────────────────────────────────────────────────────
+
+app.get('/api/search', looseLimit, async (req, res) => {
+  const q = sanitizeText(req.query.q ?? '', 50).toLowerCase();
+  if (q.length < 2) return res.json({ results: [] });
+
+  const allUsers = db.getAllUsers();
+  const matched  = allUsers
+    .filter(u => {
+      const name = (u.display_name ?? u.username ?? '').toLowerCase();
+      const handle = (u.username ?? '').toLowerCase();
+      return name.includes(q) || handle.includes(q);
+    })
+    .slice(0, 20);
+
+  // Enrich with CF data for display_name/badges
+  const results = await Promise.all(matched.map(async u => {
+    const cf = await cfRead(`user:${u.discord_id}`);
+    return {
+      discord_id:   u.discord_id,
+      username:     u.username,
+      display_name: cf?.display_name ?? u.username,
+      avatar:       u.avatar,
+      role:         u.role ?? 'member',
+      badges:       [...(cf?.badges ?? []), ...(hasOneYear(u.created_at) ? ['1_year_member'] : [])],
+    };
+  }));
+
+  res.json({ results });
+});
+
+// ── API: online users count ───────────────────────────────────────────────────
+
+app.get('/api/stats/online', looseLimit, async (req, res) => {
+  const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+  const allUsers   = db.getAllUsers();
+  let count = 0;
+  const avatars = [];
+
+  for (const u of allUsers) {
+    if (!u.last_seen || u.last_seen < fiveMinAgo) continue;
+    const cf = await cfRead(`user:${u.discord_id}`);
+    if (!cf) continue;
+    const privacy = cf.privacy ?? {};
+    if (!privacy.show_online_status) continue;
+    if (cf.banned) continue;
+    count++;
+    if (avatars.length < 5 && u.avatar) avatars.push(u.avatar);
+  }
+
+  res.json({ online: count, avatars });
+});
+
+// ── API: admin badges ─────────────────────────────────────────────────────────
+
+app.post('/api/admin/badges/:discordId', requireAdmin, express.json(), async (req, res) => {
+  const { badge, action } = req.body ?? {};
+  if (!badge) return res.status(400).json({ error: 'badge required' });
+  if (!VALID_BADGES.includes(badge)) return res.status(400).json({ error: 'Invalid badge' });
+  const cfUser = await cfRead(`user:${req.params.discordId}`);
+  if (!cfUser) return res.status(404).json({ error: 'User not found' });
+  const badges = cfUser.badges ?? [];
+  cfUser.badges = action === 'remove' ? badges.filter(b => b !== badge) : [...new Set([...badges, badge])];
+  await cfWrite(`user:${req.params.discordId}`, cfUser);
+  res.json({ success: true, badges: cfUser.badges });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

@@ -80,6 +80,13 @@ module.exports = {
     const data = readDB();
     if (data.users[discordId]) { data.users[discordId].banned = !!banned; writeDB(data); }
   },
+  setLastSeen(discordId) {
+    const data = readDB();
+    if (data.users[discordId]) { data.users[discordId].last_seen = Date.now(); writeDB(data); }
+  },
+  getAllUsers() {
+    return Object.values(readDB().users ?? {});
+  },
   removeLinkedKey(discordId, keyValue) {
     // Remove from local db entirely
     const data = readDB();

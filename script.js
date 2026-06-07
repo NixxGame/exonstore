@@ -68,6 +68,10 @@ function renderNav(user) {
   document.getElementById('nav-username').textContent   = user.username;
   const dot = document.getElementById('nav-role-dot');
   dot.dataset.role = user.role;
+  // Show bell for logged-in users
+  const bellWrap = document.getElementById('nav-bell-wrap');
+  if (bellWrap) bellWrap.style.display = 'flex';
+  loadNotifications();
 }
 
 function renderProfileCard(user) {
@@ -902,6 +906,191 @@ document.addEventListener('keydown', e => {
   if (document.getElementById('adash-user-panel').style.display  !== 'none') { adashCloseUser();   return; }
   if (document.getElementById('admin-dash').style.display        !== 'none') { adashClose();       return; }
 });
+
+
+// ── NOTIFICATIONS ──────────────────────────────────────────────────────────
+
+let _notifOpen = false;
+
+async function loadNotifications() {
+  const token = localStorage.getItem('exon_token');
+  if (!token) return;
+  try {
+    const res  = await fetch('/api/notifications', { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderNotifications(data.notifications ?? []);
+    const badge = document.getElementById('nav-bell-badge');
+    if (badge) badge.classList.toggle('has-unread', (data.unread_count ?? 0) > 0);
+  } catch {}
+}
+
+function renderNotifications(notifications) {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  if (!notifications.length) {
+    list.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
+    return;
+  }
+  list.innerHTML = notifications.map(n => {
+    const timeAgo = formatRelativeTime(n.created_at);
+    const profileUrl = `/u/${n.from_discord_id}`;
+    let msg = '';
+    if (n.type === 'follow') {
+      msg = `<a href="${profileUrl}">${escHtml(n.from_display_name || n.from_username)}</a> followed you!`;
+    } else {
+      msg = escHtml(n.message ?? n.type);
+    }
+    return `<div class="notif-item ${n.read ? '' : 'unread'}" onclick="notifMarkOne('${n.id}',this)">
+      <div class="notif-item-body">
+        <div class="notif-item-msg">${msg}</div>
+        <div class="notif-item-time">${timeAgo}</div>
+      </div>
+      ${!n.read ? '<div class="notif-unread-dot"></div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+function notifToggle() {
+  const panel = document.getElementById('notif-panel');
+  _notifOpen  = !_notifOpen;
+  panel.classList.toggle('open', _notifOpen);
+  if (_notifOpen) loadNotifications();
+}
+
+async function notifMarkAll() {
+  const token = localStorage.getItem('exon_token');
+  if (!token) return;
+  await fetch('/api/notifications/read', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  });
+  loadNotifications();
+}
+
+async function notifMarkOne(id, el) {
+  const token = localStorage.getItem('exon_token');
+  if (!token) return;
+  el.classList.remove('unread');
+  el.querySelector('.notif-unread-dot')?.remove();
+  await fetch('/api/notifications/read', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ id }),
+  }).catch(() => {});
+  const badge = document.getElementById('nav-bell-badge');
+  if (badge && !document.querySelector('.notif-item.unread')) badge.classList.remove('has-unread');
+}
+
+// Close notification panel on outside click
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.nav-bell-wrap');
+  if (wrap && !wrap.contains(e.target) && _notifOpen) {
+    document.getElementById('notif-panel').classList.remove('open');
+    _notifOpen = false;
+  }
+});
+
+function formatRelativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000)       return 'just now';
+  if (diff < 3600000)     return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000)    return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 2592000000)  return `${Math.floor(diff / 86400000)}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
+
+// ── NAV SEARCH ─────────────────────────────────────────────────────────────
+
+let _searchTimer = null;
+let _searchOpen  = false;
+
+function navSearchToggle() {
+  const input   = document.getElementById('nav-search-input');
+  const results = document.getElementById('nav-search-results');
+  _searchOpen   = !_searchOpen;
+  input.classList.toggle('open', _searchOpen);
+  if (_searchOpen) { setTimeout(() => input.focus(), 50); }
+  else { results.classList.remove('open'); results.innerHTML = ''; input.value = ''; }
+}
+
+function navSearchInput() {
+  clearTimeout(_searchTimer);
+  const q = document.getElementById('nav-search-input').value.trim();
+  if (q.length < 2) {
+    document.getElementById('nav-search-results').classList.remove('open');
+    return;
+  }
+  _searchTimer = setTimeout(() => navSearchFetch(q), 280);
+}
+
+async function navSearchFetch(q) {
+  const results = document.getElementById('nav-search-results');
+  try {
+    const res  = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    const items = data.results ?? [];
+    if (!items.length) {
+      results.innerHTML = '<div class="nav-search-empty">No users found.</div>';
+      results.classList.add('open');
+      return;
+    }
+    results.innerHTML = items.map(u => {
+      const badgeHtml = u.badges?.length
+        ? `<span style="font-size:.65rem;color:#f07a12;margin-left:4px">${badgeLabel(u.badges[0])}</span>` : '';
+      return `<a class="nav-search-result-item" href="/u/${escHtml(u.discord_id)}">
+        ${u.avatar ? `<img src="${escHtml(u.avatar)}" class="nav-search-result-avatar" alt="">` : '<div class="nav-search-result-avatar"></div>'}
+        <div class="nav-search-result-info">
+          <div class="nav-search-result-name">${escHtml(u.display_name || u.username)}${badgeHtml}</div>
+          <div class="nav-search-result-handle">@${escHtml(u.username)}</div>
+        </div>
+      </a>`;
+    }).join('');
+    results.classList.add('open');
+  } catch {}
+}
+
+function navSearchBlur() {
+  // small delay so clicks on results register
+  setTimeout(() => {
+    document.getElementById('nav-search-results').classList.remove('open');
+  }, 200);
+}
+
+function badgeLabel(badge) {
+  const labels = { early_supporter: '⭐ Early', '1_year_member': '🎂 1 Year',
+                   verified: '✓ Verified', staff: '🛡 Staff', developer: '⚒ Dev',
+                   vip: '👑 VIP', tester: '🧪 Beta', og: '🏆 OG' };
+  return labels[badge] ?? badge;
+}
+
+// Close search on outside click
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('nav-search-wrap');
+  if (wrap && !wrap.contains(e.target) && _searchOpen) {
+    navSearchToggle();
+  }
+});
+
+
+// ── ONLINE PILL ────────────────────────────────────────────────────────────
+
+async function updateOnlinePill() {
+  try {
+    const res  = await fetch('/api/stats/online');
+    const data = await res.json();
+    const pill  = document.getElementById('online-pill');
+    const count = document.getElementById('online-pill-count');
+    if (!pill || !count) return;
+    count.textContent = data.online ?? 0;
+    pill.style.display = 'flex';
+  } catch {}
+}
+
+updateOnlinePill();
+setInterval(updateOnlinePill, 30000);
 
 
 // ── FEATURE TABS ───────────────────────────────────────────────────────────
