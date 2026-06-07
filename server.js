@@ -1193,8 +1193,13 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
 
 app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, res) => {
   const { display_name, bio, privacy } = req.body ?? {};
-  const cfUser = await cfRead(`user:${req.discordId}`);
-  if (!cfUser) return res.status(404).json({ error: 'User not found' });
+  let cfUser = await cfRead(`user:${req.discordId}`);
+  if (!cfUser) {
+    // CF KV record doesn't exist yet — bootstrap it from local DB
+    const dbUser = db.getUser(req.discordId);
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+    cfUser = { ...dbUser, linked_keys: db.getUserKeys(req.discordId).map(k => k.key_value) };
+  }
 
   if (display_name !== undefined) cfUser.display_name = sanitizeText(display_name, 32);
   if (bio !== undefined)          cfUser.bio           = sanitizeText(bio, 200);
