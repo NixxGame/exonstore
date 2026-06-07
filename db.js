@@ -76,6 +76,10 @@ module.exports = {
     delete data.keys[keyValue];
     writeDB(data);
   },
+  setBanned(discordId, banned) {
+    const data = readDB();
+    if (data.users[discordId]) { data.users[discordId].banned = !!banned; writeDB(data); }
+  },
   removeLinkedKey(discordId, keyValue) {
     // Remove from local db entirely
     const data = readDB();

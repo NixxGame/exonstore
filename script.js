@@ -621,17 +621,15 @@ function adashRender(keys, total) {
     else if (k.expires_at)  expiresStr = 'Expired';
     else if (k.length_min && !k.time_created) expiresStr = formatMinutes(k.length_min) + ' total';
 
-    const userHtml = k.username
-      ? `<span class="adash-user">${escHtml(k.username)}</span>`
+    const userHtml = (k.username && k.discord_id)
+      ? `<span class="adash-user-link" onclick="adashOpenUser('${escHtml(k.discord_id)}')">${escHtml(k.username)}</span>`
       : '<span style="color:#404858">—</span>';
 
     const hwidHtml = k.hwid
       ? `<span title="${escHtml(k.hwid)}" style="font-family:monospace;font-size:.72rem;color:#7a8394">${k.hwid.slice(0,8)}…</span>`
       : '<span style="color:#404858">—</span>';
 
-    const kv       = escHtml(k.key_value);
-    const banLabel = k.banned ? 'Unban' : 'Ban';
-    const banClass = k.banned ? 'warn'  : 'danger';
+    const kv = escHtml(k.key_value);
 
     tr.innerHTML = `
       <td><span class="adash-key-val" onclick="adashCopy(this,'${kv}')" title="${kv}">${kv}</span></td>
@@ -643,7 +641,6 @@ function adashRender(keys, total) {
       <td>
         <div class="adash-actions-cell">
           <button class="adash-action-btn warn"   onclick="adashOpenTime('${kv}')">+Time</button>
-          <button class="adash-action-btn ${banClass}" onclick="adashToggleBan('${kv}',${k.banned})">${banLabel}</button>
           <button class="adash-action-btn"        onclick="adashResetHwid('${kv}')">↺ HWID</button>
           <button class="adash-action-btn danger" onclick="adashDelete('${kv}')">Delete</button>
         </div>
@@ -661,14 +658,163 @@ function adashCopy(el, key) {
   });
 }
 
-async function adashToggleBan(key, isBanned) {
+// ── USER PROFILE PANEL ─────────────────────────────────────────────────────
+
+let _adashCurrentUser = null;
+
+async function adashOpenUser(discordId) {
+  _adashCurrentUser = discordId;
+  const panel = document.getElementById('adash-user-panel');
+  const body  = document.getElementById('adash-up-body');
+  panel.style.display = 'flex';
+  body.innerHTML = '<div class="adash-loading">Loading user…</div>';
+
   const token = localStorage.getItem('exon_token');
-  await fetch(`/api/admin/keys/${encodeURIComponent(key)}/ban`, {
+  try {
+    const res  = await fetch(`/api/admin/users/${encodeURIComponent(discordId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const user = await res.json();
+    if (!res.ok) { body.innerHTML = `<div class="adash-loading">${escHtml(user.error)}</div>`; return; }
+    adashRenderUser(user);
+  } catch {
+    body.innerHTML = '<div class="adash-loading">Failed to load user.</div>';
+  }
+}
+
+function adashCloseUser() {
+  document.getElementById('adash-user-panel').style.display = 'none';
+  _adashCurrentUser = null;
+}
+
+function adashRenderUser(user) {
+  const body     = document.getElementById('adash-up-body');
+  const isBanned = user.banned ?? false;
+  const joinedAt = user.created_at ? new Date(user.created_at * 1000).toLocaleDateString() : '—';
+
+  // Key stats
+  const totalKeys   = user.keys.length;
+  const activeKeys  = user.keys.filter(k => k.time_created && k.expires_at && Date.now() < k.expires_at).length;
+  const expiredKeys = user.keys.filter(k => k.expires_at && Date.now() > k.expires_at).length;
+
+  // Combined time remaining
+  let combinedMs = 0;
+  user.keys.forEach(k => {
+    if (k.time_created && k.length_min) {
+      const rem = (k.time_created + k.length_min * 60000) - Date.now();
+      if (rem > 0) combinedMs += rem;
+    } else if (k.length_min && !k.time_created) {
+      combinedMs += k.length_min * 60000;
+    }
+  });
+  const combinedStr = combinedMs > 0 ? formatTimeLeft(Date.now() + combinedMs) : '—';
+
+  const keysHtml = user.keys.length ? user.keys.map(k => {
+    let status = 'queued', statusLabel = 'Queued';
+    if (k.time_created) {
+      const expired = k.expires_at && Date.now() > k.expires_at;
+      status = expired ? 'expired' : 'active';
+      statusLabel = expired ? 'Expired' : 'Active';
+    }
+    let expiresStr = '—';
+    if (k.expires_at && Date.now() < k.expires_at) expiresStr = formatTimeLeft(k.expires_at);
+    else if (k.expires_at) expiresStr = 'Expired';
+    else if (k.length_min && !k.time_created) expiresStr = formatMinutes(k.length_min) + ' total';
+
+    const purchStr  = k.purchased_at ? new Date(k.purchased_at).toLocaleDateString() : '—';
+    const activatedStr = k.time_created ? new Date(k.time_created).toLocaleDateString() : '—';
+    const hwidShort = k.hwid ? k.hwid.slice(0, 16) + '…' : '—';
+    const kv = escHtml(k.key_value);
+
+    return `<tr>
+      <td><span class="adash-key-val" onclick="adashCopy(this,'${kv}')" title="${kv}">${kv}</span></td>
+      <td style="color:#7a8394">${escHtml(k.plan)}</td>
+      <td><span class="adash-badge ${status}">${statusLabel}</span></td>
+      <td style="color:#7a8394;font-size:.78rem">${expiresStr}</td>
+      <td style="color:#7a8394;font-size:.78rem">${purchStr}</td>
+      <td style="color:#7a8394;font-size:.78rem">${activatedStr}</td>
+      <td style="font-family:monospace;font-size:.71rem;color:#404858;max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${escHtml(k.hwid ?? '')}">${escHtml(hwidShort)}</td>
+      <td>
+        <div class="adash-actions-cell">
+          <button class="adash-action-btn warn"   onclick="adashOpenTime('${kv}')">+Time</button>
+          <button class="adash-action-btn"        onclick="adashUserResetHwid('${kv}',this)">↺ HWID</button>
+          <button class="adash-action-btn danger" onclick="adashUserDeleteKey('${kv}',this)">Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8" class="adash-loading" style="padding:20px">No keys linked.</td></tr>`;
+
+  body.innerHTML = `
+    <div class="adash-up-card">
+      <div class="adash-up-identity">
+        ${user.avatar ? `<img src="${escHtml(user.avatar)}" class="adash-up-avatar" alt="">` : '<div class="adash-up-avatar-ph"></div>'}
+        <div>
+          <div class="adash-up-name">${escHtml(user.username)}</div>
+          <div class="adash-up-meta">
+            <span class="adash-badge ${user.role ?? 'member'}" style="font-size:.65rem">${escHtml(ROLE_LABELS[user.role] ?? user.role ?? 'Member')}</span>
+            <span class="adash-badge ${isBanned ? 'banned' : 'active'}" style="font-size:.65rem">${isBanned ? 'Banned' : 'Active'}</span>
+            <span style="color:#404858;font-size:.74rem;font-family:monospace">${escHtml(user.discord_id)}</span>
+            <span style="color:#404858;font-size:.74rem">Joined ${joinedAt}</span>
+          </div>
+        </div>
+      </div>
+      <div class="adash-up-actions">
+        <button class="adash-up-ban-btn ${isBanned ? 'unbanning' : ''}" onclick="adashBanUser('${escHtml(user.discord_id)}',${isBanned})">
+          ${isBanned ? '✓ Unban User' : '🚫 Ban User'}
+        </button>
+      </div>
+    </div>
+
+    <div class="adash-up-stats">
+      <div class="adash-up-stat"><div class="adash-up-stat-label">Total Keys</div><div class="adash-up-stat-value">${totalKeys}</div></div>
+      <div class="adash-up-stat"><div class="adash-up-stat-label">Active</div><div class="adash-up-stat-value" style="color:#10b981">${activeKeys}</div></div>
+      <div class="adash-up-stat"><div class="adash-up-stat-label">Expired</div><div class="adash-up-stat-value" style="color:#ef4444">${expiredKeys}</div></div>
+      <div class="adash-up-stat"><div class="adash-up-stat-label">Time Left</div><div class="adash-up-stat-value" style="color:#f07a12">${combinedStr}</div></div>
+      <div class="adash-up-stat"><div class="adash-up-stat-label">Role</div><div class="adash-up-stat-value">${escHtml(ROLE_LABELS[user.role] ?? user.role ?? 'Member')}</div></div>
+    </div>
+
+    <div class="adash-up-keys-label">Keys (${totalKeys})</div>
+    <div class="adash-table-wrap" style="border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden;flex:none">
+      <table class="adash-table">
+        <thead>
+          <tr>
+            <th>Key</th><th>Plan</th><th>Status</th><th>Expires / Duration</th>
+            <th>Purchased</th><th>Activated</th><th>HWID</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${keysHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+async function adashBanUser(discordId, isBanned) {
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/users/${encodeURIComponent(discordId)}/ban`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ banned: !isBanned }),
   });
-  adashLoad();
+  adashOpenUser(discordId);
+}
+
+async function adashUserResetHwid(key, btn) {
+  if (!confirm(`Reset HWID for ${key}?`)) return;
+  btn.disabled = true; btn.textContent = '…';
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/keys/${encodeURIComponent(key)}/reset-hwid`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` },
+  });
+  if (_adashCurrentUser) adashOpenUser(_adashCurrentUser);
+}
+
+async function adashUserDeleteKey(key, btn) {
+  if (!confirm(`Permanently delete ${key}?`)) return;
+  btn.disabled = true;
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/keys/${encodeURIComponent(key)}`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+  });
+  if (_adashCurrentUser) adashOpenUser(_adashCurrentUser);
 }
 
 async function adashResetHwid(key) {
@@ -751,9 +897,10 @@ function escHtml(str) {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  if (document.getElementById('adash-time-modal').style.display !== 'none') { adashTimeCancel(); return; }
-  if (document.getElementById('adash-gen-modal').style.display  !== 'none') { adashGenCancel();  return; }
-  if (document.getElementById('admin-dash').style.display       !== 'none') { adashClose();      return; }
+  if (document.getElementById('adash-time-modal').style.display  !== 'none') { adashTimeCancel();  return; }
+  if (document.getElementById('adash-gen-modal').style.display   !== 'none') { adashGenCancel();   return; }
+  if (document.getElementById('adash-user-panel').style.display  !== 'none') { adashCloseUser();   return; }
+  if (document.getElementById('admin-dash').style.display        !== 'none') { adashClose();       return; }
 });
 
 

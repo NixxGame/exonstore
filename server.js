@@ -168,6 +168,7 @@ async function restoreUserFromCF(discordId) {
   if (!user) return null;
   db.upsertUser(user.discord_id, user.username, user.avatar);
   if (user.role && user.role !== 'member') db.setUserRole(user.discord_id, user.role);
+  if (user.banned) db.setBanned(user.discord_id, true);
   await restoreKeysFromCF(discordId, user.linked_keys ?? []);
   return db.getUser(discordId);
 }
@@ -694,6 +695,10 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === discord_id);
   const dbUser   = dbData.users?.[discord_id] ?? null;
 
+  if (dbUser?.banned) {
+    return res.json({ valid: false, reason: 'This account has been banned. Contact support on Discord.' });
+  }
+
   if (!userKeys.length) {
     return res.json({
       valid:        false,
@@ -949,6 +954,55 @@ app.post('/api/admin/keys/:key/reset-hwid', requireAdmin, async (req, res) => {
   if (!cf) return res.status(404).json({ error: 'Key not found' });
   cf.hwid = null;
   await cfWrite(req.params.key, cf);
+  res.json({ success: true });
+});
+
+// GET /api/admin/users/:discordId
+app.get('/api/admin/users/:discordId', requireAdmin, async (req, res) => {
+  const dbData = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
+  const user   = dbData.users?.[req.params.discordId] ?? null;
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const cfUser   = await cfRead(`user:${req.params.discordId}`);
+  const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
+
+  const enrichedKeys = await Promise.all(userKeys.map(async k => {
+    const cf = await cfRead(k.key_value);
+    const timeCreated = cf?.time_created ?? null;
+    const length      = cf?.length ?? null;
+    const expiresAt   = timeCreated && length ? timeCreated + length * 60000 : null;
+    return {
+      key_value:    k.key_value,
+      plan:         k.plan ?? cf?.plan ?? '—',
+      active:       k.active,
+      hwid:         cf?.hwid ?? null,
+      time_created: timeCreated,
+      expires_at:   expiresAt,
+      length_min:   length,
+      purchased_at: cf?.purchased_at ?? null,
+    };
+  }));
+
+  enrichedKeys.sort((a, b) => (b.purchased_at ?? 0) - (a.purchased_at ?? 0));
+
+  res.json({
+    ...user,
+    banned:     cfUser?.banned ?? user.banned ?? false,
+    linked_keys: cfUser?.linked_keys ?? [],
+    keys:       enrichedKeys,
+  });
+});
+
+// POST /api/admin/users/:discordId/ban  { banned }
+app.post('/api/admin/users/:discordId/ban', requireAdmin, express.json(), async (req, res) => {
+  const banned = !!req.body?.banned;
+  db.setBanned(req.params.discordId, banned);
+  const cfUser = await cfRead(`user:${req.params.discordId}`);
+  if (cfUser) {
+    cfUser.banned = banned;
+    await cfWrite(`user:${req.params.discordId}`, cfUser);
+  }
+  console.log(`Admin ${req.discordId} ${banned ? 'banned' : 'unbanned'} user ${req.params.discordId}`);
   res.json({ success: true });
 });
 
