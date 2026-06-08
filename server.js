@@ -735,6 +735,7 @@ app.get('/api/me', standardLimit, requireAuth, async (req, res) => {
     keys,
     combined_ms:        combinedMs,
     combined_activated: anyActivated,
+    vanity:             (await cfRead(`user:${req.discordId}`))?.vanity ?? null,
   });
 });
 
@@ -1070,16 +1071,17 @@ app.get('/api/admin/keys', requireAdmin, async (req, res) => {
   res.json({ keys: enriched, total, page, limit, user_count: userCount });
 });
 
-// POST /api/admin/keys/generate  { plan, days }
+// POST /api/admin/keys/generate  { plan, days, lifetime }
 app.post('/api/admin/keys/generate', requireAdmin, express.json(), async (req, res) => {
-  const { plan, days } = req.body ?? {};
-  if (!plan || !days) return res.status(400).json({ error: 'plan and days required' });
+  const { plan, days, lifetime } = req.body ?? {};
+  if (!plan) return res.status(400).json({ error: 'plan required' });
+  if (!lifetime && !days) return res.status(400).json({ error: 'days required (or set lifetime: true)' });
   const key     = generateKey();
-  const minutes = Math.round(parseFloat(days) * 1440);
+  const minutes = lifetime ? 525960000 : Math.round(parseFloat(days) * 1440); // 525960000 = 999 years
   db.insertKey(key, plan, null, null);
   await cfWrite(key, {
     key, discord_id: null, hwid: null, time_created: null,
-    purchased_at: Date.now(), length: minutes, active: false, banned: false,
+    purchased_at: Date.now(), length: minutes, active: false, banned: false, lifetime: !!lifetime,
   });
   res.json({ key });
 });

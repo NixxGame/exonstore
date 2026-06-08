@@ -71,7 +71,7 @@ function renderProfileCard(user) {
   document.getElementById('pc-username').textContent = user.username;
 
   const profileLink = document.getElementById('pc-profile-link');
-  if (profileLink) profileLink.href = `/u/${user.discord_id}`;
+  if (profileLink) profileLink.href = `/u/${user.vanity ?? user.discord_id}`;
 
   const adminBtn = document.getElementById('pc-admin-btn');
   if (adminBtn) adminBtn.style.display = ['staff','developer'].includes(user.role) ? '' : 'none';
@@ -305,8 +305,13 @@ async function resetHwid(keyValue, btn) {
   }
 }
 
+const LIFETIME_THRESHOLD = 500000000; // anything above this = lifetime key
+
+function isLifetime(minutes) { return minutes && minutes >= LIFETIME_THRESHOLD; }
+
 function formatMinutes(minutes) {
   if (!minutes) return '∞';
+  if (isLifetime(minutes)) return 'Lifetime ∞';
   const days = Math.floor(minutes / 1440);
   if (days >= 1) return `${days}d`;
   const hours = Math.floor(minutes / 60);
@@ -633,7 +638,8 @@ function adashRender(keys, total) {
 
     // Expires column
     let expiresStr = '—';
-    if (k.expires_at && Date.now() < k.expires_at) expiresStr = formatTimeLeft(k.expires_at);
+    if (isLifetime(k.length_min)) expiresStr = '<span style="color:#10b981">Lifetime ∞</span>';
+    else if (k.expires_at && Date.now() < k.expires_at) expiresStr = formatTimeLeft(k.expires_at);
     else if (k.expires_at)  expiresStr = 'Expired';
     else if (k.length_min && !k.time_created) expiresStr = formatMinutes(k.length_min) + ' total';
 
@@ -873,29 +879,47 @@ async function adashDelete(key) {
 }
 
 function adashOpenGenModal() {
-  document.getElementById('adash-gen-plan').value       = '';
-  document.getElementById('adash-gen-days').value       = '30';
+  document.getElementById('adash-gen-plan').value           = '';
+  document.getElementById('adash-gen-duration').value       = '30';
+  document.getElementById('adash-gen-days').value           = '';
+  document.getElementById('adash-gen-days').style.display   = 'none';
   document.getElementById('adash-gen-result').style.display = 'none';
   document.getElementById('adash-gen-result').textContent   = '';
   document.getElementById('adash-gen-modal').style.display  = 'flex';
 }
 
+function adashDurationChange(sel) {
+  const customInput = document.getElementById('adash-gen-days');
+  customInput.style.display = sel.value === 'custom' ? '' : 'none';
+  if (sel.value === 'custom') { customInput.value = ''; customInput.focus(); }
+}
+
 function adashGenCancel() { document.getElementById('adash-gen-modal').style.display = 'none'; }
 
 async function adashGenSubmit() {
-  const plan = document.getElementById('adash-gen-plan').value.trim();
-  const days = parseFloat(document.getElementById('adash-gen-days').value);
-  if (!plan || !days) return;
+  const plan     = document.getElementById('adash-gen-plan').value.trim();
+  const durVal   = document.getElementById('adash-gen-duration').value;
+  const lifetime = durVal === 'lifetime';
+  let days;
+  if (lifetime) {
+    days = null;
+  } else if (durVal === 'custom') {
+    days = parseFloat(document.getElementById('adash-gen-days').value);
+    if (!days || days < 1) { alert('Enter a valid number of days.'); return; }
+  } else {
+    days = parseFloat(durVal);
+  }
+  if (!plan) { alert('Enter a plan name.'); return; }
   const token = localStorage.getItem('exon_token');
   const res   = await fetch('/api/admin/keys/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ plan, days }),
+    body: JSON.stringify({ plan, days, lifetime }),
   });
   const data = await res.json();
   if (res.ok) {
     const el = document.getElementById('adash-gen-result');
-    el.textContent  = data.key;
+    el.textContent   = data.key;
     el.style.display = '';
     navigator.clipboard.writeText(data.key).catch(() => {});
     adashLoad();

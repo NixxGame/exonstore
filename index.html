@@ -52,8 +52,9 @@
     .adash-modal-card{background:#0e1119;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:26px;width:320px;display:flex;flex-direction:column;gap:9px}
     .adash-modal-title{font-size:.95rem;font-weight:700;color:#eef0f6;margin-bottom:2px}
     .adash-modal-card label{font-size:.7rem;font-weight:600;color:#7a8394;text-transform:uppercase;letter-spacing:.06em}
-    .adash-modal-card input{background:#06080d;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:8px 11px;font-size:.84rem;outline:none;width:100%;box-sizing:border-box}
-    .adash-modal-card input:focus{border-color:rgba(240,122,18,.4)}
+    .adash-modal-card input,.adash-modal-card select{background:#06080d;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:8px 11px;font-size:.84rem;outline:none;width:100%;box-sizing:border-box}
+    .adash-modal-card input:focus,.adash-modal-card select:focus{border-color:rgba(240,122,18,.4)}
+    .adash-modal-card select option{background:#06080d}
     .adash-modal-actions{display:flex;gap:8px;margin-top:2px}
     .adash-modal-actions button{flex:1;padding:8px;border-radius:8px;font-size:.84rem;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#eef0f6}
     .adash-modal-actions button:hover{background:rgba(255,255,255,.1)}
@@ -795,8 +796,16 @@
         <div class="adash-modal-title">Generate Key</div>
         <label>Plan Name</label>
         <input id="adash-gen-plan" type="text" placeholder="e.g. 1 Month">
-        <label>Duration (days)</label>
-        <input id="adash-gen-days" type="number" min="1" value="30">
+        <label>Duration</label>
+        <select id="adash-gen-duration" onchange="adashDurationChange(this)">
+          <option value="1">1 Day</option>
+          <option value="7">1 Week</option>
+          <option value="30" selected>1 Month</option>
+          <option value="90">3 Months</option>
+          <option value="lifetime">Lifetime ∞</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input id="adash-gen-days" type="number" min="1" placeholder="Days" style="display:none;margin-top:6px">
         <div class="adash-modal-actions">
           <button onclick="adashGenCancel()">Cancel</button>
           <button class="primary" onclick="adashGenSubmit()">Generate</button>
