@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exon Admin — Loader Control</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#070910;color:#e6e9f2;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:#0d1018;border:1px solid rgba(240,122,18,.18);border-radius:14px;padding:36px 40px;width:520px;max-width:95vw}
+  h1{font-size:18px;font-weight:700;letter-spacing:.06em;margin-bottom:4px}
+  .sub{font-size:12px;color:rgba(160,170,190,.5);margin-bottom:28px}
+  .row{display:flex;align-items:center;justify-content:space-between;background:#0a0d14;border:1px solid rgba(240,122,18,.12);border-radius:10px;padding:14px 18px;margin-bottom:12px}
+  .row-label{font-size:14px;font-weight:600}
+  .row-sub{font-size:11px;color:rgba(160,170,190,.45);margin-top:3px}
+  .toggle{width:44px;height:22px;border-radius:11px;background:#1a1f2e;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+  .toggle.on{background:#f07a12}
+  .toggle::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+  .toggle.on::after{transform:translateX(22px)}
+  label{font-size:12px;color:rgba(160,170,190,.55);display:block;margin-bottom:6px;margin-top:14px}
+  input,textarea{width:100%;background:#070910;border:1px solid rgba(240,122,18,.15);border-radius:8px;color:#e6e9f2;font-size:13px;padding:10px 14px;outline:none;font-family:inherit;resize:vertical}
+  input:focus,textarea:focus{border-color:rgba(240,122,18,.4)}
+  textarea{min-height:120px}
+  .btn{width:100%;margin-top:22px;padding:13px;border-radius:9px;border:none;background:linear-gradient(135deg,#f07a12,#d96a08);color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:opacity .15s}
+  .btn:hover{opacity:.85}
+  .status-bar{margin-top:18px;padding:12px 16px;border-radius:8px;font-size:13px;display:none}
+  .status-bar.ok{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:#4ade80}
+  .status-bar.err{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:#f87171}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
+  .dot.green{background:#4ade80} .dot.orange{background:#f07a12} .dot.red{background:#f87171}
+  #auth-gate{text-align:center}
+  #auth-gate h2{font-size:16px;margin-bottom:18px;color:rgba(240,122,18,1)}
+  #auth-gate input{text-align:center;letter-spacing:.1em}
+  #auth-gate .btn{margin-top:14px}
+  .live{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(160,170,190,.5);margin-bottom:20px}
+</style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div class="card" id="auth-gate">
+  <h2>EXON ADMIN</h2>
+  <p style="font-size:13px;color:rgba(160,170,190,.4);margin-bottom:18px">Enter loader secret to continue</p>
+  <input type="password" id="secret-input" placeholder="Loader secret key" />
+  <button class="btn" onclick="authenticate()">Unlock</button>
+  <div class="status-bar err" id="auth-err">Incorrect secret</div>
+</div>
+
+<!-- Main panel -->
+<div class="card" id="main-panel" style="display:none">
+  <h1>LOADER CONTROL</h1>
+  <p class="sub">exoncheats.com admin panel</p>
+
+  <div class="live" id="live-indicator">
+    <span class="dot" id="live-dot"></span>
+    <span id="live-text">Loading status...</span>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="row-label">Loader Online</div>
+      <div class="row-sub">Disable to block all logins (kill switch)</div>
+    </div>
+    <button class="toggle" id="tgl-online" onclick="toggle('online')"></button>
+  </div>
+
+  <div class="row">
+    <div>
+      <div class="row-label">Maintenance Mode</div>
+      <div class="row-sub">Shows maintenance message instead of auth</div>
+    </div>
+    <button class="toggle" id="tgl-maintenance" onclick="toggle('maintenance')"></button>
+  </div>
+
+  <label>Status Message (shown in loader when offline/maintenance)</label>
+  <input type="text" id="inp-message" placeholder="e.g. Back in ~30 minutes" maxlength="300" />
+
+  <label>Changelog (shown on Home tab — one entry per line)</label>
+  <textarea id="inp-changelog" placeholder="v1.2.0 — Added new aimbot settings&#10;v1.1.0 — Bug fixes"></textarea>
+
+  <button class="btn" onclick="save()">Save Changes</button>
+  <div class="status-bar" id="save-status"></div>
+</div>
+
+<script>
+const API = 'https://exoncheats.com';
+let secret = '';
+let state  = { online: true, maintenance: false, message: '', changelog: '' };
+
+async function authenticate() {
+  secret = document.getElementById('secret-input').value.trim();
+  try {
+    const r = await fetch(`${API}/api/loader/status`);
+    const d = await r.json();
+    state = d;
+    document.getElementById('auth-err').style.display = 'none';
+    // Verify secret by trying a no-op POST
+    const t = await fetch(`${API}/api/admin/loader/status`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!t.ok) { showAuthErr(); return; }
+    document.getElementById('auth-gate').style.display  = 'none';
+    document.getElementById('main-panel').style.display = 'block';
+    render();
+    setInterval(fetchStatus, 5000);
+  } catch(e) { showAuthErr(); }
+}
+
+function showAuthErr() {
+  const el = document.getElementById('auth-err');
+  el.style.display = 'block';
+}
+
+async function fetchStatus() {
+  try {
+    const r = await fetch(`${API}/api/loader/status`);
+    state = await r.json();
+    render();
+  } catch {}
+}
+
+function render() {
+  setToggle('tgl-online',      state.online);
+  setToggle('tgl-maintenance', state.maintenance);
+  document.getElementById('inp-message').value   = state.message   ?? '';
+  document.getElementById('inp-changelog').value = state.changelog ?? '';
+
+  const dot  = document.getElementById('live-dot');
+  const text = document.getElementById('live-text');
+  if (!state.online)      { dot.className='dot red';    text.textContent='OFFLINE — logins blocked'; }
+  else if (state.maintenance) { dot.className='dot orange'; text.textContent='MAINTENANCE MODE'; }
+  else                    { dot.className='dot green';  text.textContent='ONLINE — loader active'; }
+}
+
+function setToggle(id, val) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on', !!val);
+}
+
+async function toggle(key) {
+  state[key] = !state[key];
+  render();
+  await push({ [key]: state[key] });
+}
+
+async function save() {
+  const msg = document.getElementById('inp-message').value;
+  const cl  = document.getElementById('inp-changelog').value;
+  await push({ message: msg, changelog: cl });
+}
+
+async function push(body) {
+  const bar = document.getElementById('save-status');
+  try {
+    const r = await fetch(`${API}/api/admin/loader/status`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      state = d.status;
+      render();
+      bar.className = 'status-bar ok';
+      bar.textContent = 'Saved successfully';
+    } else {
+      bar.className = 'status-bar err';
+      bar.textContent = d.error ?? 'Failed';
+    }
+  } catch(e) {
+    bar.className = 'status-bar err';
+    bar.textContent = 'Network error';
+  }
+  bar.style.display = 'block';
+  setTimeout(() => bar.style.display = 'none', 3000);
+}
+
+document.getElementById('secret-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') authenticate();
+});
+</script>
+</body>
+</html>

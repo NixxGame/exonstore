@@ -1217,6 +1217,35 @@ app.get('/api/loader/version', looseLimit, (req, res) => {
   });
 });
 
+// ── API: loader status (kill switch) ─────────────────────────────────────────
+// In-memory — survives hot reloads but resets on restart. Seed from env vars.
+const loaderStatus = {
+  online:      process.env.LOADER_ONLINE !== 'false',
+  maintenance: process.env.LOADER_MAINTENANCE === 'true',
+  message:     process.env.LOADER_STATUS_MSG  ?? '',
+  changelog:   process.env.LOADER_CHANGELOG   ?? '',
+};
+
+// Public — loader checks this on every launch
+app.get('/api/loader/status', looseLimit, (req, res) => {
+  res.json(loaderStatus);
+});
+
+// Admin toggle — protected by LOADER_SECRET (same key used by the loader)
+app.post('/api/admin/loader/status', express.json(), strictLimit, (req, res) => {
+  const auth = req.headers.authorization ?? '';
+  if (auth !== `Bearer ${process.env.LOADER_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { online, maintenance, message, changelog } = req.body ?? {};
+  if (online      !== undefined) loaderStatus.online      = Boolean(online);
+  if (maintenance !== undefined) loaderStatus.maintenance = Boolean(maintenance);
+  if (message     !== undefined) loaderStatus.message     = String(message  ?? '').slice(0, 300);
+  if (changelog   !== undefined) loaderStatus.changelog   = String(changelog ?? '').slice(0, 4000);
+  console.log(`[admin] loader status updated:`, loaderStatus);
+  res.json({ ok: true, status: loaderStatus });
+});
+
 // ── Profile pages (/u/ routes) ───────────────────────────────────────────────
 
 app.get('/u/:slug', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
