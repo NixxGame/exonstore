@@ -1875,10 +1875,12 @@ async function restoreAllFromCF() {
   await Promise.all(keyNames.map(async kv => {
     if (db.getKey(kv)) return; // already in local DB
     const cf = await cfRead(kv);
-    if (!cf || !cf.discord_id) return;
+    if (!cf) return;
     db.insertKey(kv, cf.plan ?? null, null, null);
-    db.linkKey(kv, cf.discord_id);
-    if (cf.active || cf.time_created) db.activateKey(kv);
+    if (cf.discord_id) {
+      db.linkKey(kv, cf.discord_id);
+      if (cf.active || cf.time_created) db.activateKey(kv);
+    }
     restored++;
   }));
 
