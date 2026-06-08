@@ -747,14 +747,10 @@ async function saveStatus() {
 async function renderActrlCoupons() {
   const token = localStorage.getItem('exon_token');
   const body  = document.getElementById('actrl-body');
-  let coupons = [], promos = [], promoCodesEnabled = false;
+  let coupons = [], promos = [];
   try {
-    const [cr, ptr] = await Promise.all([
-      fetch('/api/admin/coupons', { headers:{ Authorization:`Bearer ${token}` }}),
-      fetch('/api/admin/pricing-table', { headers:{ Authorization:`Bearer ${token}` }}),
-    ]);
-    if (cr.ok)  { const d = await cr.json();  coupons = d.coupons; promos = d.promo_codes; }
-    if (ptr.ok) { const d = await ptr.json(); promoCodesEnabled = d.allow_promotion_codes; }
+    const cr = await fetch('/api/admin/coupons', { headers:{ Authorization:`Bearer ${token}` }});
+    if (cr.ok) { const d = await cr.json(); coupons = d.coupons; promos = d.promo_codes; }
   } catch {}
 
   const promoByName = {};
@@ -763,14 +759,12 @@ async function renderActrlCoupons() {
   body.innerHTML = `
     <div class="actrl-section-title">Checkout Settings</div>
     <div class="actrl-status-toggle" style="margin-bottom:20px">
-      <div class="actrl-toggle-track ${promoCodesEnabled ? 'on' : ''}" id="promo-toggle" onclick="promoToggleClick()">
-        <div class="actrl-toggle-thumb"></div>
+      <div style="font-size:1.2rem;flex-shrink:0">🔗</div>
+      <div style="flex:1">
+        <div style="font-size:.88rem;font-weight:600;color:#eef0f6">Customer-facing coupon codes</div>
+        <div style="font-size:.75rem;color:#7a8394">Stripe doesn't allow this to be toggled via API — manage it directly in the dashboard</div>
       </div>
-      <div>
-        <div style="font-size:.88rem;font-weight:600;color:#eef0f6">Use customer-facing coupon codes</div>
-        <div style="font-size:.75rem;color:#7a8394">Shows a promo code field on the Stripe checkout page</div>
-      </div>
-      <div id="promo-toggle-saving" style="font-size:.75rem;color:#7a8394;margin-left:auto;display:none">Saving…</div>
+      <a href="https://dashboard.stripe.com/pricing-tables/prctbl_1TdaqM2UtKaemIpmwVgBrMON" target="_blank" class="actrl-btn" style="white-space:nowrap;text-decoration:none">Open in Stripe ↗</a>
     </div>
     <div class="actrl-section-title">Create Coupon</div>
     <div class="actrl-card">
@@ -826,24 +820,6 @@ async function renderActrlCoupons() {
           <button class="actrl-btn danger" onclick="deleteCoupon('${c.id}')">Delete</button>
         </div>`;
       }).join('')}`;
-}
-
-async function promoToggleClick() {
-  const track   = document.getElementById('promo-toggle');
-  const saving  = document.getElementById('promo-toggle-saving');
-  const token   = localStorage.getItem('exon_token');
-  const enabled = track.classList.toggle('on');
-  saving.style.display = 'block';
-  const r = await fetch('/api/admin/pricing-table', {
-    method: 'POST', headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-    body: JSON.stringify({ allow_promotion_codes: enabled }),
-  });
-  saving.style.display = 'none';
-  if (!r.ok) {
-    track.classList.toggle('on'); // revert
-    const d = await r.json();
-    alert('Error: ' + d.error);
-  }
 }
 
 async function createCoupon() {
@@ -946,8 +922,59 @@ function bulkDownload() {
   a.click(); URL.revokeObjectURL(url);
 }
 
+// ── Bulk generate (Key Dashboard modal) ──────────────────────────────────────
+
+function adashOpenBulkModal() {
+  window._adashBulkKeys = [];
+  document.getElementById('adash-bulk-result').style.display = 'none';
+  document.getElementById('adash-bulk-preview').innerHTML = '';
+  document.getElementById('adash-bulk-plan').value = '';
+  document.getElementById('adash-bulk-count').value = '10';
+  document.getElementById('adash-bulk-duration').value = '30';
+  document.getElementById('adash-bulk-days').style.display = 'none';
+  document.getElementById('adash-bulk-modal').style.display = 'flex';
+}
+
+function adashBulkCancel() {
+  document.getElementById('adash-bulk-modal').style.display = 'none';
+}
+
+function adashBulkDurChange(sel) {
+  document.getElementById('adash-bulk-days').style.display = sel.value === 'custom' ? 'block' : 'none';
+}
+
+async function adashBulkSubmit() {
+  const token    = localStorage.getItem('exon_token');
+  const plan     = document.getElementById('adash-bulk-plan').value.trim();
+  const durVal   = document.getElementById('adash-bulk-duration').value;
+  const lifetime = durVal === 'lifetime';
+  const days     = durVal === 'custom' ? document.getElementById('adash-bulk-days').value : (lifetime ? null : durVal);
+  const count    = parseInt(document.getElementById('adash-bulk-count').value) || 10;
+  if (!plan) return alert('Plan name required');
+  const r = await fetch('/api/admin/keys/bulk-generate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ plan, days, lifetime, count }),
+  });
+  if (!r.ok) return alert('Error: ' + (await r.json()).error);
+  const d = await r.json();
+  window._adashBulkKeys = d.keys;
+  document.getElementById('adash-bulk-result').style.display = 'block';
+  document.getElementById('adash-bulk-preview').innerHTML = d.keys.map(k => `<div>${k}</div>`).join('');
+  adashLoad();
+}
+
+function adashBulkDownload() {
+  const keys = window._adashBulkKeys ?? [];
+  if (!keys.length) return;
+  const plan = document.getElementById('adash-bulk-plan').value.trim() || 'keys';
+  const blob = new Blob([keys.join('\n')], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `exon-${plan.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.txt`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
 // ── Show admin controls button when admin ─────────────────────────────────────
-// (called after loadMe sets the role)
 function showAdminControlsBtn(role) {
   const btn = document.getElementById('pc-actrl-btn');
   if (btn && ['staff','developer'].includes(role)) btn.style.display = 'flex';

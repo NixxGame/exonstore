@@ -817,7 +817,6 @@
       <button class="actrl-tab active" onclick="actrlTab('announcements',this)">📢 Announcements</button>
       <button class="actrl-tab" onclick="actrlTab('status',this)">🟢 Status</button>
       <button class="actrl-tab" onclick="actrlTab('coupons',this)">🎟 Coupons</button>
-      <button class="actrl-tab" onclick="actrlTab('bulk',this)">🔑 Bulk Keys</button>
     </div>
     <div class="actrl-body" id="actrl-body">
       <div class="adash-loading">Loading…</div>
@@ -835,6 +834,7 @@
       </div>
       <div class="adash-header-right">
         <input id="adash-search" class="adash-search" type="text" placeholder="Search key or user…" oninput="adashSearch()">
+        <button class="adash-gen-btn" onclick="adashOpenBulkModal()" style="background:rgba(240,122,18,.15);color:#f07a12;border:1px solid rgba(240,122,18,.3)">⬇ Bulk</button>
         <button class="adash-gen-btn" onclick="adashOpenGenModal()">+ Generate Key</button>
         <button class="adash-close-btn" onclick="adashClose()">✕</button>
       </div>
@@ -908,6 +908,34 @@
         <div class="adash-modal-actions">
           <button onclick="adashTimeCancel()">Cancel</button>
           <button class="primary" onclick="adashTimeSubmit()">Add Time</button>
+        </div>
+      </div>
+    </div>
+    <!-- Bulk Generate Modal -->
+    <div id="adash-bulk-modal" class="adash-modal" style="display:none">
+      <div class="adash-modal-card" style="width:360px">
+        <div class="adash-modal-title">Bulk Generate Keys</div>
+        <label>Plan Name</label>
+        <input id="adash-bulk-plan" type="text" placeholder="e.g. 1 Month">
+        <label>Duration</label>
+        <select id="adash-bulk-duration" onchange="adashBulkDurChange(this)">
+          <option value="1">1 Day</option>
+          <option value="7">1 Week</option>
+          <option value="30" selected>1 Month</option>
+          <option value="90">3 Months</option>
+          <option value="lifetime">Lifetime ∞</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input id="adash-bulk-days" type="number" min="1" placeholder="Days" style="display:none;margin-top:6px">
+        <label>Count (1–100)</label>
+        <input id="adash-bulk-count" type="number" min="1" max="100" value="10">
+        <div class="adash-modal-actions">
+          <button onclick="adashBulkCancel()">Cancel</button>
+          <button class="primary" onclick="adashBulkSubmit()">Generate</button>
+        </div>
+        <div id="adash-bulk-result" style="display:none;margin-top:6px">
+          <button class="adash-action-btn" style="width:100%;padding:7px;justify-content:center;display:flex" onclick="adashBulkDownload()">⬇ Download .txt</button>
+          <div id="adash-bulk-preview" style="font-size:.7rem;font-family:monospace;color:#a0a8bc;margin-top:8px;max-height:100px;overflow-y:auto;line-height:1.8"></div>
         </div>
       </div>
     </div>

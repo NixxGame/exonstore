@@ -1757,35 +1757,6 @@ app.post('/api/validate-coupon', standardLimit, express.json(), async (req, res)
   }
 });
 
-const PRICING_TABLE_ID = 'prctbl_1TdaqM2UtKaemIpmwVgBrMON';
-
-// GET /api/admin/pricing-table  — returns allow_promotion_codes status
-app.get('/api/admin/pricing-table', requireAdmin, async (req, res) => {
-  try {
-    const r = await axios.get(`https://api.stripe.com/v1/pricing_tables/${PRICING_TABLE_ID}`, {
-      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
-    });
-    res.json({ allow_promotion_codes: r.data.allow_promotion_codes ?? false });
-  } catch (e) {
-    res.status(500).json({ error: e.response?.data?.error?.message ?? e.message });
-  }
-});
-
-// POST /api/admin/pricing-table  { allow_promotion_codes }
-app.post('/api/admin/pricing-table', requireAdmin, express.json(), async (req, res) => {
-  const { allow_promotion_codes } = req.body ?? {};
-  try {
-    await axios.post(
-      `https://api.stripe.com/v1/pricing_tables/${PRICING_TABLE_ID}`,
-      `allow_promotion_codes=${!!allow_promotion_codes}`,
-      { headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.response?.data?.error?.message ?? e.message });
-  }
-});
-
 // GET /api/admin/coupons
 app.get('/api/admin/coupons', requireAdmin, async (req, res) => {
   try {
