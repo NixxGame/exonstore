@@ -1392,41 +1392,61 @@ async function loadNotifications() {
   const token = localStorage.getItem('exon_token');
   if (!token) return;
   try {
-    const res  = await fetch('/api/notifications', { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return;
-    const data = await res.json();
-    renderNotifications(data.notifications ?? []);
+    const [notifRes, announceRes] = await Promise.all([
+      fetch('/api/notifications', { headers: { Authorization: `Bearer ${token}` } }),
+      fetch('/api/announcements'),
+    ]);
+    if (!notifRes.ok) return;
+    const data        = await notifRes.json();
+    const announcements = announceRes.ok ? await announceRes.json() : [];
+    renderNotifications(data.notifications ?? [], announcements);
     const unread = data.unread_count ?? 0;
     const badge = document.getElementById('nav-bell-badge');
     if (badge) badge.classList.toggle('has-unread', unread > 0);
-    // Update page title with unread count
     const base = document.title.replace(/^\(\d+\)\s*/, '');
     document.title = unread > 0 ? `(${unread}) ${base}` : base;
   } catch {}
 }
 
-function renderNotifications(notifications) {
+const ANNOUNCE_TYPE_ICON  = { info: 'ℹ️', update: '🔄', warning: '⚠️', downtime: '🔴', promo: '🎟' };
+const ANNOUNCE_TYPE_COLOR = { info:'#3b82f6', update:'#10b981', warning:'#f07a12', downtime:'#ef4444', promo:'#a855f7' };
+
+function renderNotifications(notifications, announcements = []) {
   const list = document.getElementById('notif-list');
   if (!list) return;
-  if (!notifications.length) {
+
+  // Merge announcements into the notifications list, sorted by date
+  const items = [
+    ...notifications.map(n => ({ ...n, _kind: 'notif' })),
+    ...announcements.slice(0, 5).map(a => ({ ...a, _kind: 'announce' })),
+  ].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
+
+  if (!items.length) {
     list.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
     return;
   }
-  list.innerHTML = notifications.map(n => {
-    const timeAgo = formatRelativeTime(n.created_at);
-    const profileUrl = `/u/${n.from_discord_id}`;
-    let msg = '';
-    if (n.type === 'follow') {
-      msg = `<a href="${profileUrl}">${escHtml(n.from_display_name || n.from_username)}</a> followed you!`;
-    } else {
-      msg = escHtml(n.message ?? n.type);
+
+  list.innerHTML = items.map(item => {
+    if (item._kind === 'announce') {
+      const icon  = ANNOUNCE_TYPE_ICON[item.type]  ?? 'ℹ️';
+      const color = ANNOUNCE_TYPE_COLOR[item.type] ?? '#3b82f6';
+      return `<div class="notif-item" style="border-left:2px solid ${color};padding-left:12px">
+        <div class="notif-item-body">
+          <div class="notif-item-msg">${icon} <strong>${escHtml(item.title)}</strong> — ${escHtml(item.body.slice(0,60))}${item.body.length>60?'…':''}</div>
+          <div class="notif-item-time">${timeAgo(item.created_at)}</div>
+        </div>
+      </div>`;
     }
-    return `<div class="notif-item ${n.read ? '' : 'unread'}" onclick="notifMarkOne('${n.id}',this)">
+    const profileUrl = `/u/${item.from_discord_id}`;
+    const msg = item.type === 'follow'
+      ? `<a href="${profileUrl}">${escHtml(item.from_display_name || item.from_username)}</a> followed you!`
+      : escHtml(item.message ?? item.type);
+    return `<div class="notif-item ${item.read ? '' : 'unread'}" onclick="notifMarkOne('${item.id}',this)">
       <div class="notif-item-body">
         <div class="notif-item-msg">${msg}</div>
-        <div class="notif-item-time">${timeAgo}</div>
+        <div class="notif-item-time">${formatRelativeTime(item.created_at)}</div>
       </div>
-      ${!n.read ? '<div class="notif-unread-dot"></div>' : ''}
+      ${!item.read ? '<div class="notif-unread-dot"></div>' : ''}
     </div>`;
   }).join('');
 }
