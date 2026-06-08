@@ -75,6 +75,8 @@ function renderProfileCard(user) {
 
   const adminBtn = document.getElementById('pc-admin-btn');
   if (adminBtn) adminBtn.style.display = ['staff','developer'].includes(user.role) ? '' : 'none';
+  const actrlBtn = document.getElementById('pc-actrl-btn');
+  if (actrlBtn) actrlBtn.style.display = ['staff','developer'].includes(user.role) ? '' : 'none';
 
   const badge = document.getElementById('pc-role-badge');
   badge.textContent    = ROLE_LABELS[user.role] ?? user.role;
@@ -552,6 +554,364 @@ document.addEventListener('click', e => {
     setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
   });
 });
+
+// ── STATUS BANNER ──────────────────────────────────────────────────────────────
+
+async function loadStatusBanner() {
+  try {
+    const r = await fetch('/api/status');
+    if (!r.ok) return;
+    const s = await r.json();
+    const banner = document.getElementById('status-banner');
+    if (!banner) return;
+    if (!s.online) {
+      banner.className = 'status-banner offline';
+      document.getElementById('status-banner-text').textContent =
+        s.message ? `Loader Offline — ${s.message}` : 'Loader is currently offline';
+    } else if (s.message) {
+      banner.className = 'status-banner maintenance';
+      document.getElementById('status-banner-text').textContent = s.message;
+    } else {
+      banner.className = 'status-banner'; // hidden
+    }
+  } catch {}
+}
+
+loadStatusBanner();
+
+// Also show announcements on dashboard if present
+async function loadAnnouncements() {
+  try {
+    const r = await fetch('/api/announcements');
+    if (!r.ok) return;
+    const list = await r.json();
+    const el = document.getElementById('announce-feed');
+    if (!el || !list.length) return;
+    el.innerHTML = list.slice(0, 5).map(a => `
+      <div class="announce-card ${a.type ?? 'info'}">
+        <div class="announce-title">${escHtml(a.title)}</div>
+        <div class="announce-body">${escHtml(a.body)}</div>
+        <div class="announce-meta">${timeAgo(a.created_at)}</div>
+      </div>`).join('');
+    el.style.display = 'flex';
+  } catch {}
+}
+
+function timeAgo(ts) {
+  const d = Date.now() - ts;
+  if (d < 60000)   return 'just now';
+  if (d < 3600000) return Math.floor(d/60000) + 'm ago';
+  if (d < 86400000) return Math.floor(d/3600000) + 'h ago';
+  return Math.floor(d/86400000) + 'd ago';
+}
+
+// ── ADMIN CONTROLS PANEL ──────────────────────────────────────────────────────
+
+let _actrlTab = 'announcements';
+
+function actrlOpen() {
+  document.getElementById('admin-ctrl').style.display = 'flex';
+  actrlTab('announcements', document.querySelector('.actrl-tab'));
+}
+
+function actrlClose() {
+  document.getElementById('admin-ctrl').style.display = 'none';
+}
+
+function actrlTab(tab, btn) {
+  _actrlTab = tab;
+  document.querySelectorAll('.actrl-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const body = document.getElementById('actrl-body');
+  body.innerHTML = '<div class="adash-loading">Loading…</div>';
+  if (tab === 'announcements') renderActrlAnnouncements();
+  else if (tab === 'status')   renderActrlStatus();
+  else if (tab === 'coupons')  renderActrlCoupons();
+  else if (tab === 'bulk')     renderActrlBulk();
+}
+
+// ── Announcements tab ──────────────────────────────────────────────────────────
+
+async function renderActrlAnnouncements() {
+  const token = localStorage.getItem('exon_token');
+  const list  = await fetch('/api/announcements').then(r => r.json()).catch(() => []);
+  const body  = document.getElementById('actrl-body');
+  body.innerHTML = `
+    <div class="actrl-section-title">Post Announcement</div>
+    <div class="actrl-card">
+      <div>
+        <div class="actrl-label">Title</div>
+        <input class="actrl-input" id="an-title" placeholder="e.g. Maintenance tonight" maxlength="100">
+      </div>
+      <div>
+        <div class="actrl-label">Type</div>
+        <select class="actrl-select" id="an-type">
+          <option value="info">Info</option>
+          <option value="update">Update</option>
+          <option value="warning">Warning</option>
+          <option value="downtime">Downtime</option>
+        </select>
+      </div>
+      <div>
+        <div class="actrl-label">Body</div>
+        <textarea class="actrl-textarea" id="an-body" maxlength="500" placeholder="Announcement details…"></textarea>
+      </div>
+      <button class="actrl-btn primary" onclick="postAnnouncement()">Post Announcement</button>
+      <div id="an-result" style="font-size:.8rem;color:#10b981;display:none">Posted!</div>
+    </div>
+    <div class="actrl-section-title">Recent (${list.length})</div>
+    <div id="an-list">
+      ${!list.length ? '<div class="actrl-empty">No announcements yet</div>' :
+        list.map(a => `
+          <div class="actrl-announce-item">
+            <div class="actrl-announce-text">
+              <strong>${escHtml(a.title)}</strong>
+              <span>${escHtml(a.body.slice(0,80))}${a.body.length>80?'…':''} · ${timeAgo(a.created_at)}</span>
+            </div>
+            <button class="actrl-btn danger" onclick="deleteAnnouncement('${a.id}')">Delete</button>
+          </div>`).join('')}
+    </div>`;
+}
+
+async function postAnnouncement() {
+  const token = localStorage.getItem('exon_token');
+  const title = document.getElementById('an-title').value.trim();
+  const body2 = document.getElementById('an-body').value.trim();
+  const type  = document.getElementById('an-type').value;
+  if (!title || !body2) return alert('Title and body required');
+  const r = await fetch('/api/admin/announcements', {
+    method: 'POST', headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+    body: JSON.stringify({ title, body: body2, type }),
+  });
+  if (!r.ok) return alert('Failed: ' + (await r.json()).error);
+  const res = document.getElementById('an-result');
+  res.style.display = 'block';
+  setTimeout(() => { res.style.display='none'; actrlTab('announcements', null); }, 1200);
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete this announcement?')) return;
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/announcements/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token}` }});
+  actrlTab('announcements', null);
+}
+
+// ── Status tab ────────────────────────────────────────────────────────────────
+
+async function renderActrlStatus() {
+  const r = await fetch('/api/status');
+  const s = r.ok ? await r.json() : { online: true, message: '' };
+  const body = document.getElementById('actrl-body');
+  body.innerHTML = `
+    <div class="actrl-section-title">Loader Status</div>
+    <div class="actrl-status-toggle">
+      <div class="actrl-toggle-track ${s.online ? 'on' : ''}" id="status-toggle" onclick="statusToggleClick()">
+        <div class="actrl-toggle-thumb"></div>
+      </div>
+      <div>
+        <div style="font-size:.88rem;font-weight:600;color:#eef0f6" id="status-toggle-label">${s.online ? 'Online' : 'Offline'}</div>
+        <div style="font-size:.75rem;color:#7a8394">Toggle loader availability</div>
+      </div>
+    </div>
+    <div class="actrl-card">
+      <div class="actrl-label">Status Message (optional — shown in banner)</div>
+      <input class="actrl-input" id="status-msg" value="${escHtml(s.message ?? '')}" placeholder="e.g. Undergoing maintenance until 8pm EST" maxlength="200">
+      <button class="actrl-btn primary" onclick="saveStatus()">Save</button>
+      <div id="status-result" style="font-size:.8rem;color:#10b981;display:none">Saved!</div>
+    </div>`;
+  window._statusOnline = s.online;
+}
+
+function statusToggleClick() {
+  window._statusOnline = !window._statusOnline;
+  const t = document.getElementById('status-toggle');
+  const l = document.getElementById('status-toggle-label');
+  t.className = 'actrl-toggle-track' + (window._statusOnline ? ' on' : '');
+  l.textContent = window._statusOnline ? 'Online' : 'Offline';
+}
+
+async function saveStatus() {
+  const token = localStorage.getItem('exon_token');
+  const msg   = document.getElementById('status-msg').value.trim();
+  const r = await fetch('/api/admin/status', {
+    method: 'POST', headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+    body: JSON.stringify({ online: window._statusOnline, message: msg }),
+  });
+  if (!r.ok) return alert('Failed');
+  document.getElementById('status-result').style.display = 'block';
+  setTimeout(() => { document.getElementById('status-result').style.display='none'; loadStatusBanner(); }, 1500);
+}
+
+// ── Coupons tab ───────────────────────────────────────────────────────────────
+
+async function renderActrlCoupons() {
+  const token = localStorage.getItem('exon_token');
+  const body  = document.getElementById('actrl-body');
+  let coupons = [], promos = [];
+  try {
+    const r = await fetch('/api/admin/coupons', { headers:{ Authorization:`Bearer ${token}` }});
+    if (r.ok) { const d = await r.json(); coupons = d.coupons; promos = d.promo_codes; }
+  } catch {}
+
+  const promoByName = {};
+  promos.forEach(p => { promoByName[p.coupon.id] = p.code; });
+
+  body.innerHTML = `
+    <div class="actrl-section-title">Create Coupon</div>
+    <div class="actrl-card">
+      <div>
+        <div class="actrl-label">Code / Name (no spaces)</div>
+        <input class="actrl-input" id="cp-name" placeholder="e.g. LAUNCH20" maxlength="20">
+      </div>
+      <div class="actrl-row">
+        <div style="flex:1">
+          <div class="actrl-label">% Off</div>
+          <input class="actrl-input" id="cp-pct" type="number" min="1" max="100" placeholder="20">
+        </div>
+        <div style="align-self:center;color:#7a8394;font-size:.82rem;flex-shrink:0">OR</div>
+        <div style="flex:1">
+          <div class="actrl-label">$ Off</div>
+          <input class="actrl-input" id="cp-amt" type="number" min="0.01" step="0.01" placeholder="5.00">
+        </div>
+      </div>
+      <div class="actrl-row">
+        <div style="flex:1">
+          <div class="actrl-label">Max Redemptions (blank = unlimited)</div>
+          <input class="actrl-input" id="cp-max" type="number" min="1" placeholder="">
+        </div>
+        <div style="flex:1">
+          <div class="actrl-label">Duration</div>
+          <select class="actrl-select" id="cp-dur">
+            <option value="once">Once</option>
+            <option value="forever">Forever</option>
+          </select>
+        </div>
+      </div>
+      <button class="actrl-btn primary" onclick="createCoupon()">Create Coupon</button>
+      <div id="cp-result" style="font-size:.8rem;display:none"></div>
+    </div>
+    <div class="actrl-section-title">Active Coupons (${coupons.length})</div>
+    ${!coupons.length ? '<div class="actrl-empty">No coupons yet</div>' :
+      coupons.map(c => {
+        const discount = c.percent_off ? `${c.percent_off}% off` : `$${(c.amount_off/100).toFixed(2)} off`;
+        const code = promoByName[c.id] ?? '—';
+        const redeemed = c.times_redeemed ?? 0;
+        const max = c.max_redemptions ?? '∞';
+        return `<div class="actrl-coupon-row">
+          <div>
+            <div class="actrl-coupon-code">${escHtml(code)}</div>
+            <div class="actrl-coupon-info">${discount} · ${redeemed}/${max} used · ${c.duration}</div>
+          </div>
+          <button class="actrl-btn danger" onclick="deleteCoupon('${c.id}')">Delete</button>
+        </div>`;
+      }).join('')}`;
+}
+
+async function createCoupon() {
+  const token = localStorage.getItem('exon_token');
+  const name  = document.getElementById('cp-name').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const pct   = document.getElementById('cp-pct').value;
+  const amt   = document.getElementById('cp-amt').value;
+  const max   = document.getElementById('cp-max').value;
+  const dur   = document.getElementById('cp-dur').value;
+  if (!name) return alert('Code required');
+  if (!pct && !amt) return alert('Enter % off or $ off');
+  const res = document.getElementById('cp-result');
+  const r = await fetch('/api/admin/coupons', {
+    method: 'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+    body: JSON.stringify({ name, ...(pct ? {percent_off:parseFloat(pct)} : {amount_off:parseFloat(amt)}), max_redemptions:max||undefined, duration:dur }),
+  });
+  const d = await r.json();
+  if (!r.ok) { res.style.cssText='display:block;color:#ef4444'; res.textContent='Error: '+d.error; return; }
+  res.style.cssText='display:block;color:#10b981';
+  res.textContent = `Created! Code: ${d.promo_code}`;
+  setTimeout(() => renderActrlCoupons(), 2000);
+}
+
+async function deleteCoupon(id) {
+  if (!confirm('Delete this coupon? This cannot be undone.')) return;
+  const token = localStorage.getItem('exon_token');
+  await fetch(`/api/admin/coupons/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token}` }});
+  renderActrlCoupons();
+}
+
+// ── Bulk keys tab ─────────────────────────────────────────────────────────────
+
+function renderActrlBulk() {
+  const body = document.getElementById('actrl-body');
+  body.innerHTML = `
+    <div class="actrl-section-title">Bulk Generate Keys</div>
+    <div class="actrl-card">
+      <div>
+        <div class="actrl-label">Plan Name</div>
+        <input class="actrl-input" id="bk-plan" placeholder="e.g. 1 Month">
+      </div>
+      <div>
+        <div class="actrl-label">Duration</div>
+        <select class="actrl-select" id="bk-dur" onchange="bkDurChange(this)">
+          <option value="1">1 Day</option>
+          <option value="7">1 Week</option>
+          <option value="30" selected>1 Month</option>
+          <option value="90">3 Months</option>
+          <option value="lifetime">Lifetime ∞</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input class="actrl-input" id="bk-days" type="number" min="1" placeholder="Days" style="display:none;margin-top:6px">
+      </div>
+      <div>
+        <div class="actrl-label">Count (1–100)</div>
+        <input class="actrl-input" id="bk-count" type="number" min="1" max="100" value="10">
+      </div>
+      <button class="actrl-btn primary" onclick="bulkGenerate()">Generate Keys</button>
+      <div id="bk-result" style="display:none">
+        <div style="font-size:.78rem;color:#7a8394;margin-bottom:6px">Generated keys (click to download .txt):</div>
+        <button class="actrl-btn" id="bk-dl-btn" onclick="bulkDownload()">⬇ Download .txt</button>
+        <div id="bk-preview" style="font-size:.7rem;font-family:monospace;color:#a0a8bc;margin-top:8px;max-height:120px;overflow-y:auto;line-height:1.7"></div>
+      </div>
+    </div>`;
+  window._bkKeys = [];
+}
+
+function bkDurChange(sel) {
+  document.getElementById('bk-days').style.display = sel.value === 'custom' ? 'block' : 'none';
+}
+
+async function bulkGenerate() {
+  const token    = localStorage.getItem('exon_token');
+  const plan     = document.getElementById('bk-plan').value.trim();
+  const durVal   = document.getElementById('bk-dur').value;
+  const lifetime = durVal === 'lifetime';
+  const days     = durVal === 'custom' ? document.getElementById('bk-days').value : (lifetime ? null : durVal);
+  const count    = parseInt(document.getElementById('bk-count').value) || 10;
+  if (!plan) return alert('Plan name required');
+  const r = await fetch('/api/admin/keys/bulk-generate', {
+    method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+    body: JSON.stringify({ plan, days, lifetime, count }),
+  });
+  if (!r.ok) return alert('Error: ' + (await r.json()).error);
+  const d = await r.json();
+  window._bkKeys = d.keys;
+  document.getElementById('bk-result').style.display = 'block';
+  document.getElementById('bk-preview').innerHTML = d.keys.map(k => `<div>${k}</div>`).join('');
+}
+
+function bulkDownload() {
+  const keys = window._bkKeys ?? [];
+  if (!keys.length) return;
+  const plan  = document.getElementById('bk-plan').value.trim() || 'keys';
+  const blob  = new Blob([keys.join('\n')], { type: 'text/plain' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href = url; a.download = `exon-${plan.replace(/\s+/g,'-').toLowerCase()}-${Date.now()}.txt`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Show admin controls button when admin ─────────────────────────────────────
+// (called after loadMe sets the role)
+function showAdminControlsBtn(role) {
+  const btn = document.getElementById('pc-actrl-btn');
+  if (btn && ['staff','developer'].includes(role)) btn.style.display = 'flex';
+}
 
 
 // ── ADMIN KEY DASHBOARD ────────────────────────────────────────────────────

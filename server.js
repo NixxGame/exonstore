@@ -1682,6 +1682,138 @@ app.get('/api/stats/online', looseLimit, async (req, res) => {
 
 // ── API: admin badges ─────────────────────────────────────────────────────────
 
+// ── Announcements ─────────────────────────────────────────────────────────────
+
+app.get('/api/announcements', looseLimit, async (req, res) => {
+  const list = (await cfRead('announcements')) ?? [];
+  res.json(list);
+});
+
+app.post('/api/admin/announcements', requireAdmin, express.json(), async (req, res) => {
+  const { title, body, type = 'info' } = req.body ?? {};
+  if (!title || !body) return res.status(400).json({ error: 'title and body required' });
+  const list = (await cfRead('announcements')) ?? [];
+  const item = {
+    id: Date.now().toString(),
+    title: title.slice(0, 100),
+    body:  body.slice(0, 500),
+    type,
+    created_at: Date.now(),
+    author: req.username ?? 'Admin',
+  };
+  list.unshift(item);
+  await cfWrite('announcements', list.slice(0, 50));
+  res.json({ success: true, item });
+});
+
+app.delete('/api/admin/announcements/:id', requireAdmin, async (req, res) => {
+  const list = (await cfRead('announcements')) ?? [];
+  await cfWrite('announcements', list.filter(a => a.id !== req.params.id));
+  res.json({ success: true });
+});
+
+// ── Loader Status ─────────────────────────────────────────────────────────────
+
+app.get('/api/status', looseLimit, async (req, res) => {
+  const s = (await cfRead('loader_status')) ?? { online: true, message: '', updated_at: null };
+  res.json(s);
+});
+
+app.post('/api/admin/status', requireAdmin, express.json(), async (req, res) => {
+  const { online, message = '' } = req.body ?? {};
+  await cfWrite('loader_status', { online: !!online, message: message.slice(0, 200), updated_at: Date.now() });
+  res.json({ success: true });
+});
+
+// ── Coupon codes ──────────────────────────────────────────────────────────────
+
+// POST /api/validate-coupon  { code }  — called from checkout page to preview discount
+app.post('/api/validate-coupon', standardLimit, express.json(), async (req, res) => {
+  const { code } = req.body ?? {};
+  if (!code) return res.status(400).json({ error: 'code required' });
+  try {
+    const promos = await stripeTest.promotionCodes.list({ code: code.trim().toUpperCase(), active: true, limit: 1 });
+    const promo  = promos.data[0];
+    if (!promo) return res.status(404).json({ error: 'Invalid or expired code' });
+    const coupon   = promo.coupon;
+    const discount = coupon.percent_off
+      ? `${coupon.percent_off}% off`
+      : `$${(coupon.amount_off / 100).toFixed(2)} off`;
+    res.json({ valid: true, promo_code_id: promo.id, discount, coupon_id: coupon.id });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not validate code' });
+  }
+});
+
+// GET /api/admin/coupons
+app.get('/api/admin/coupons', requireAdmin, async (req, res) => {
+  try {
+    const [coupons, promos] = await Promise.all([
+      stripeTest.coupons.list({ limit: 20 }),
+      stripeTest.promotionCodes.list({ limit: 20, active: true }),
+    ]);
+    res.json({ coupons: coupons.data, promo_codes: promos.data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/coupons  { name, percent_off | amount_off, max_redemptions, duration }
+app.post('/api/admin/coupons', requireAdmin, express.json(), async (req, res) => {
+  const { name, percent_off, amount_off, max_redemptions, duration = 'once' } = req.body ?? {};
+  if (!name) return res.status(400).json({ error: 'name required' });
+  if (!percent_off && !amount_off) return res.status(400).json({ error: 'percent_off or amount_off required' });
+  try {
+    const coupon = await stripeTest.coupons.create({
+      name,
+      ...(percent_off
+        ? { percent_off: parseFloat(percent_off) }
+        : { amount_off: Math.round(parseFloat(amount_off) * 100), currency: 'usd' }),
+      duration,
+      ...(max_redemptions ? { max_redemptions: parseInt(max_redemptions) } : {}),
+    });
+    const code  = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const promo = await stripeTest.promotionCodes.create({ coupon: coupon.id, code });
+    res.json({ success: true, coupon_id: coupon.id, promo_code: promo.code });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/admin/coupons/:id
+app.delete('/api/admin/coupons/:id', requireAdmin, async (req, res) => {
+  try {
+    await stripeTest.coupons.del(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Bulk key generation ───────────────────────────────────────────────────────
+
+// POST /api/admin/keys/bulk-generate  { plan, days, lifetime, count }
+app.post('/api/admin/keys/bulk-generate', requireAdmin, express.json(), async (req, res) => {
+  const { plan, days, lifetime, count = 1 } = req.body ?? {};
+  if (!plan) return res.status(400).json({ error: 'plan required' });
+  if (!lifetime && !days) return res.status(400).json({ error: 'days required (or lifetime: true)' });
+  const n       = Math.min(Math.max(parseInt(count) || 1, 1), 100);
+  const minutes = lifetime ? 525960000 : Math.round(parseFloat(days) * 1440);
+  const keys    = [];
+  for (let i = 0; i < n; i++) {
+    const key = generateKey();
+    db.insertKey(key, plan, null, null);
+    await cfWrite(key, {
+      key, discord_id: null, hwid: null, time_created: null,
+      purchased_at: Date.now(), length: minutes, active: false, banned: false, lifetime: !!lifetime,
+    });
+    keys.push(key);
+  }
+  res.json({ keys });
+});
+
+// ── Badges ────────────────────────────────────────────────────────────────────
+
 app.post('/api/admin/badges/:discordId', requireAdmin, express.json(), async (req, res) => {
   const { badge, action } = req.body ?? {};
   if (!badge) return res.status(400).json({ error: 'badge required' });
@@ -1718,7 +1850,9 @@ async function restoreAllFromCF() {
   const keyNames  = allCFKeys.filter(k =>
     !k.startsWith('user:') &&
     !k.startsWith('vanity:') &&
-    k !== 'search_index'
+    k !== 'search_index' &&
+    k !== 'announcements' &&
+    k !== 'loader_status'
   );
   let restored = 0;
 
