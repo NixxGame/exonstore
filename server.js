@@ -1732,7 +1732,7 @@ app.post('/api/validate-coupon', standardLimit, express.json(), async (req, res)
   const { code } = req.body ?? {};
   if (!code) return res.status(400).json({ error: 'code required' });
   try {
-    const promos = await stripeTest.promotionCodes.list({ code: code.trim().toUpperCase(), active: true, limit: 1 });
+    const promos = await stripe.promotionCodes.list({ code: code.trim().toUpperCase(), active: true, limit: 1 });
     const promo  = promos.data[0];
     if (!promo) return res.status(404).json({ error: 'Invalid or expired code' });
     const coupon   = promo.coupon;
@@ -1749,8 +1749,8 @@ app.post('/api/validate-coupon', standardLimit, express.json(), async (req, res)
 app.get('/api/admin/coupons', requireAdmin, async (req, res) => {
   try {
     const [coupons, promos] = await Promise.all([
-      stripeTest.coupons.list({ limit: 20 }),
-      stripeTest.promotionCodes.list({ limit: 20, active: true }),
+      stripe.coupons.list({ limit: 20 }),
+      stripe.promotionCodes.list({ limit: 20, active: true }),
     ]);
     res.json({ coupons: coupons.data, promo_codes: promos.data });
   } catch (e) {
@@ -1764,7 +1764,7 @@ app.post('/api/admin/coupons', requireAdmin, express.json(), async (req, res) =>
   if (!name) return res.status(400).json({ error: 'name required' });
   if (!percent_off && !amount_off) return res.status(400).json({ error: 'percent_off or amount_off required' });
   try {
-    const coupon = await stripeTest.coupons.create({
+    const coupon = await stripe.coupons.create({
       name,
       ...(percent_off
         ? { percent_off: parseFloat(percent_off) }
@@ -1773,7 +1773,7 @@ app.post('/api/admin/coupons', requireAdmin, express.json(), async (req, res) =>
       ...(max_redemptions ? { max_redemptions: parseInt(max_redemptions) } : {}),
     });
     const code  = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const promo = await stripeTest.promotionCodes.create({
+    const promo = await stripe.promotionCodes.create({
       coupon: coupon.id,
       code,
       ...(first_time_only ? { restrictions: { first_time_transaction: true } } : {}),
@@ -1787,7 +1787,7 @@ app.post('/api/admin/coupons', requireAdmin, express.json(), async (req, res) =>
 // DELETE /api/admin/coupons/:id
 app.delete('/api/admin/coupons/:id', requireAdmin, async (req, res) => {
   try {
-    await stripeTest.coupons.del(req.params.id);
+    await stripe.coupons.del(req.params.id);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
