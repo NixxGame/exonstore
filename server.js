@@ -1100,6 +1100,8 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
   if (!cfUser && !dbUser) return res.status(404).json({ error: 'User not found' });
 
   const user    = { ...(dbUser ?? {}), ...(cfUser ?? {}) };
+  // DB role is always authoritative — synced from Discord on every login
+  if (dbUser?.role) user.role = dbUser.role;
   const privacy = user.privacy ?? {};
 
   // Identify requester
