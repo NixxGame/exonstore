@@ -105,10 +105,28 @@ function renderProfileCard(user) {
   const timeStr = totalMs > 0 ? formatTimeLeft(Date.now() + totalMs) : 'Not Activated';
   const timeCol = totalMs > 0 ? 'key-active' : '';
 
+  // Key expiry warning: show amber banner if soonest active key expires within 7 days
+  let expiryWarningHtml = '';
+  for (const k of user.keys ?? []) {
+    if (k.queue_status === 'active') {
+      // We'll check after key details load; for now show banner only if combined_ms is set
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (user.combined_ms > 0 && user.combined_ms <= sevenDaysMs) {
+        const d = Math.floor(user.combined_ms / 86400000);
+        const h = Math.floor((user.combined_ms % 86400000) / 3600000);
+        expiryWarningHtml = `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:9px;padding:9px 14px;margin-bottom:10px;font-size:.8rem;color:#fbbf24;">
+          ⚠️ Your subscription expires in <strong>${d > 0 ? d + 'd ' : ''}${h}h</strong> — <a href="#pricing" style="color:#f07a12;text-decoration:underline">renew</a>
+        </div>`;
+      }
+      break;
+    }
+  }
+
   // Combined header
   const header = document.createElement('div');
   header.className = 'profile-key-item';
   header.innerHTML = `
+    ${expiryWarningHtml}
     <div class="profile-key-header">
       <span class="profile-key-value">Exon External License</span>
       <span class="profile-key-plan ${timeCol}">${timeStr}</span>
@@ -578,6 +596,8 @@ async function adashLoad() {
     if (res.status === 403) { adashClose(); return; }
     const data = await res.json();
     _adashTotal = data.total;
+    const ucEl = document.getElementById('adash-user-count');
+    if (ucEl && data.user_count !== undefined) ucEl.textContent = `${data.user_count} user${data.user_count !== 1 ? 's' : ''}`;
     adashRender(data.keys, data.total);
   } catch {
     tbody.innerHTML = '<tr><td colspan="7" class="adash-loading">Failed to load.</td></tr>';
@@ -755,6 +775,11 @@ function adashRenderUser(user) {
         </div>
       </div>
       <div class="adash-up-actions">
+        <select class="adash-role-select" onchange="adashSetRole('${escHtml(user.discord_id)}',this.value,this)" title="Override role">
+          ${['member','customer','vip','staff','developer'].map(r =>
+            `<option value="${r}" ${user.role===r?'selected':''}>${escHtml(ROLE_LABELS[r]??r)}</option>`
+          ).join('')}
+        </select>
         <button class="adash-up-ban-btn ${isBanned ? 'unbanning' : ''}" onclick="adashBanUser('${escHtml(user.discord_id)}',${isBanned})">
           ${isBanned ? '✓ Unban User' : '🚫 Ban User'}
         </button>
@@ -781,6 +806,22 @@ function adashRenderUser(user) {
         <tbody>${keysHtml}</tbody>
       </table>
     </div>`;
+}
+
+async function adashSetRole(discordId, role, selectEl) {
+  if (!confirm(`Set role to "${ROLE_LABELS[role] ?? role}" for this user? This will update Discord roles.`)) {
+    // Revert select
+    adashOpenUser(discordId); return;
+  }
+  selectEl.disabled = true;
+  const token = localStorage.getItem('exon_token');
+  const res = await fetch(`/api/admin/users/${encodeURIComponent(discordId)}/role`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ role }),
+  });
+  if (!res.ok) { alert('Failed to set role.'); }
+  adashOpenUser(discordId);
 }
 
 async function adashBanUser(discordId, isBanned) {
@@ -912,8 +953,12 @@ async function loadNotifications() {
     if (!res.ok) return;
     const data = await res.json();
     renderNotifications(data.notifications ?? []);
+    const unread = data.unread_count ?? 0;
     const badge = document.getElementById('nav-bell-badge');
-    if (badge) badge.classList.toggle('has-unread', (data.unread_count ?? 0) > 0);
+    if (badge) badge.classList.toggle('has-unread', unread > 0);
+    // Update page title with unread count
+    const base = document.title.replace(/^\(\d+\)\s*/, '');
+    document.title = unread > 0 ? `(${unread}) ${base}` : base;
   } catch {}
 }
 

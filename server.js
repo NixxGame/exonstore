@@ -81,7 +81,7 @@ async function updateLastSeen(discordId) {
 
 // ── Role helpers ──────────────────────────────────────────────────────────────
 
-const ROLE_ORDER = ['member', 'customer', 'staff', 'developer'];
+const ROLE_ORDER = ['member', 'customer', 'vip', 'staff', 'developer'];
 
 function promoteUser(discordId, targetRole) {
   const user = db.getUser(discordId);
@@ -108,6 +108,41 @@ async function assignDiscordRole(discordId, envKey) {
   } catch (err) {
     console.error('Role assignment error:', err.response?.data ?? err.message);
   }
+}
+
+// Set a user's role: update DB + CF KV + Discord (add new role, remove old ones)
+async function setUserRoleFull(discordId, newRole) {
+  const guildId  = process.env.DISCORD_GUILD_ID;
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  const roleEnvMap = {
+    developer: 'DISCORD_ROLE_DEVELOPER',
+    staff:     'DISCORD_ROLE_STAFF',
+    vip:       'DISCORD_ROLE_VIP',
+    customer:  'DISCORD_ROLE_CUSTOMER',
+    member:    'DISCORD_ROLE_MEMBER',
+  };
+  // Update DB and CF KV
+  db.setUserRole(discordId, newRole);
+  const cfUser = await cfRead(`user:${discordId}`);
+  if (cfUser) { cfUser.role = newRole; await cfWrite(`user:${discordId}`, cfUser); }
+
+  if (!guildId || !botToken) return;
+  const headers = { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' };
+  // Remove all managed role IDs, then add the new one
+  for (const [role, envKey] of Object.entries(roleEnvMap)) {
+    const roleId = role === 'vip' ? '1513352322116485310' : process.env[envKey];
+    if (!roleId) continue;
+    try {
+      if (role === newRole) {
+        await axios.put(`https://discord.com/api/v10/guilds/${guildId}/members/${discordId}/roles/${roleId}`, {}, { headers });
+      } else {
+        await axios.delete(`https://discord.com/api/v10/guilds/${guildId}/members/${discordId}/roles/${roleId}`, { headers });
+      }
+    } catch (err) {
+      console.error(`Role sync ${role} for ${discordId}:`, err.response?.status);
+    }
+  }
+  console.log(`Set role ${newRole} for ${discordId} (DB + CF + Discord)`);
 }
 
 // ── JWT ───────────────────────────────────────────────────────────────────────
@@ -652,6 +687,32 @@ app.get('/api/me', standardLimit, requireAuth, async (req, res) => {
     user.role = discordRole;
   }
 
+  // Key expiry DM — warn once when any active key has <= 3 days left
+  (async () => {
+    try {
+      const cfSelf = await cfRead(`user:${req.discordId}`);
+      const warnedKeys = cfSelf?.expiry_warned ?? {};
+      let updated = false;
+      for (const k of sortedKeys) {
+        const cf = cfMap[k.key_value];
+        if (!cf?.time_created || !cf?.length) continue;
+        const expiresAt = cf.time_created + cf.length * 60 * 1000;
+        const msLeft    = expiresAt - Date.now();
+        if (msLeft > 0 && msLeft <= 3 * 24 * 60 * 60 * 1000 && !warnedKeys[k.key_value]) {
+          const days = Math.floor(msLeft / 86400000);
+          const hrs  = Math.floor((msLeft % 86400000) / 3600000);
+          await sendDiscordDM(req.discordId,
+            `⚠️ **Heads up!** Your Exon External key \`${k.key_value}\` expires in **${days > 0 ? days + 'd ' : ''}${hrs}h**. Renew at https://exoncheats.com/#pricing`);
+          warnedKeys[k.key_value] = Date.now();
+          updated = true;
+        }
+        // Clear warn flag once expired so it won't fire again for a new key
+        if (msLeft <= 0 && warnedKeys[k.key_value]) { delete warnedKeys[k.key_value]; updated = true; }
+      }
+      if (updated && cfSelf) { cfSelf.expiry_warned = warnedKeys; await cfWrite(`user:${req.discordId}`, cfSelf); }
+    } catch {}
+  })();
+
   res.json({
     ...user,
     keys,
@@ -988,7 +1049,8 @@ app.get('/api/admin/keys', requireAdmin, async (req, res) => {
     };
   }));
 
-  res.json({ keys: enriched, total, page, limit });
+  const userCount = Object.keys(JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8')).users ?? {}).length;
+  res.json({ keys: enriched, total, page, limit, user_count: userCount });
 });
 
 // POST /api/admin/keys/generate  { plan, days }
@@ -1077,6 +1139,15 @@ app.get('/api/admin/users/:discordId', requireAdmin, async (req, res) => {
   });
 });
 
+// POST /api/admin/users/:discordId/role  { role }
+app.post('/api/admin/users/:discordId/role', requireAdmin, express.json(), async (req, res) => {
+  const { role } = req.body ?? {};
+  if (!ROLE_ORDER.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  await setUserRoleFull(req.params.discordId, role);
+  console.log(`Admin ${req.discordId} set role ${role} for ${req.params.discordId}`);
+  res.json({ success: true });
+});
+
 // POST /api/admin/users/:discordId/ban  { banned }
 app.post('/api/admin/users/:discordId/ban', requireAdmin, express.json(), async (req, res) => {
   const banned = !!req.body?.banned;
@@ -1108,9 +1179,20 @@ app.get('/api/loader/version', looseLimit, (req, res) => {
 
 // ── Profile pages (/u/ routes) ───────────────────────────────────────────────
 
-app.get('/u/:discordId', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
-app.get('/u/:discordId/followers', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
-app.get('/u/:discordId/following', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/u/:slug', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/u/:slug/followers', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/u/:slug/following', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+
+// ── API: resolve vanity slug → discord_id ────────────────────────────────────
+
+app.get('/api/resolve/:slug', looseLimit, async (req, res) => {
+  const slug = req.params.slug.toLowerCase();
+  // If it looks like a Discord ID (digits only), return as-is
+  if (/^\d{15,20}$/.test(slug)) return res.json({ discord_id: slug });
+  const record = await cfRead(`vanity:${slug}`);
+  if (!record?.discord_id) return res.status(404).json({ error: 'Vanity not found' });
+  res.json({ discord_id: record.discord_id });
+});
 
 // ── API: public profile ───────────────────────────────────────────────────────
 
@@ -1133,6 +1215,16 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
   // Block check — blocked users see 404
   if (!isOwner && requesterId && (user.blocked ?? []).includes(requesterId)) {
     return res.status(404).json({ error: 'User not found' });
+  }
+
+  // Profile view counter (skip owner, fire-and-forget)
+  if (!isOwner && cfUser) {
+    (async () => {
+      try {
+        cfUser.profile_views = (cfUser.profile_views ?? 0) + 1;
+        await cfWrite(`user:${req.params.discordId}`, cfUser);
+      } catch {}
+    })();
   }
 
   // Auto badge: 1 year member
@@ -1166,6 +1258,8 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
     last_seen:          (privacy.show_online_status && user.last_seen) ? user.last_seen : null,
     accent_color:       user.accent_color ?? null,
     team_description:   user.team_description ?? null,
+    vanity:             user.vanity ?? null,
+    profile_views:      isOwner ? (cfUser?.profile_views ?? 0) : undefined,
     mutual_count,
     can_edit_color:     COLOR_ROLES.has(user.role ?? 'member'),
     full_color:         FULL_COLOR_ROLES.has(user.role ?? 'member'),
@@ -1268,6 +1362,35 @@ app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, r
     const role   = dbUser?.role ?? cfUser.role ?? 'member';
     if (FULL_COLOR_ROLES.has(role)) {
       cfUser.team_description = sanitizeText(team_description, 120);
+    }
+  }
+
+  // Vanity URL — VIP+ only, alphanumeric + underscores, 3-24 chars
+  const { vanity } = req.body ?? {};
+  if (vanity !== undefined) {
+    const dbUser = db.getUser(req.discordId);
+    const role   = dbUser?.role ?? cfUser.role ?? 'member';
+    if (COLOR_ROLES.has(role)) {
+      if (vanity === null || vanity === '') {
+        // Clear vanity
+        if (cfUser.vanity) await cfDelete(`vanity:${cfUser.vanity}`);
+        cfUser.vanity = null;
+      } else {
+        const slug = String(vanity).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24);
+        if (slug.length >= 3) {
+          // Check uniqueness
+          const existing = await cfRead(`vanity:${slug}`);
+          if (!existing || existing.discord_id === req.discordId) {
+            // Remove old vanity mapping
+            if (cfUser.vanity && cfUser.vanity !== slug) await cfDelete(`vanity:${cfUser.vanity}`);
+            cfUser.vanity = slug;
+            await cfWrite(`vanity:${slug}`, { discord_id: req.discordId });
+          } else {
+            await cfWrite(`user:${req.discordId}`, cfUser);
+            return res.status(409).json({ error: 'Vanity URL already taken' });
+          }
+        }
+      }
     }
   }
 

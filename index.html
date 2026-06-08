@@ -73,6 +73,8 @@
     .adash-up-name{font-size:1.05rem;font-weight:700;color:#eef0f6;margin-bottom:5px}
     .adash-up-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     .adash-up-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+    .adash-role-select{background:#06080d;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#eef0f6;padding:6px 10px;font-size:.82rem;outline:none;cursor:pointer}
+    .adash-role-select:focus{border-color:rgba(240,122,18,.4)}
     .adash-up-ban-btn{padding:8px 16px;border-radius:8px;font-size:.84rem;font-weight:600;cursor:pointer;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#ef4444;transition:all .15s}
     .adash-up-ban-btn:hover{background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.5)}
     .adash-up-ban-btn.unbanning{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.1);color:#10b981}
@@ -769,6 +771,7 @@
     </div>
     <div class="adash-footer">
       <span id="adash-count" style="color:#7a8394;font-size:.8rem;">— keys</span>
+      <span id="adash-user-count" style="color:#5a6478;font-size:.78rem;margin-left:12px"></span>
       <div class="adash-pagination">
         <button class="adash-page-btn" id="adash-prev" onclick="adashPage(-1)" disabled>← Prev</button>
         <span id="adash-page-info" style="color:#7a8394;font-size:.8rem;">Page 1</span>

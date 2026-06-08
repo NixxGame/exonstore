@@ -297,6 +297,8 @@ function applyAccentColor(hex) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
+let resolvedId = null; // actual discord_id after vanity resolution
+
 async function boot() {
   if (token) {
     fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
@@ -308,6 +310,19 @@ async function boot() {
       }).catch(()=>{});
   }
   if (!targetId) { renderError('No user specified.'); return; }
+
+  // Resolve vanity slug → discord_id if not already a numeric ID
+  if (/^\d{15,20}$/.test(targetId)) {
+    resolvedId = targetId;
+  } else {
+    try {
+      const r = await fetch(`/api/resolve/${encodeURIComponent(targetId)}`);
+      if (!r.ok) { renderError('This user does not exist or their profile is private.'); return; }
+      const d = await r.json();
+      resolvedId = d.discord_id;
+    } catch { renderError('Failed to load profile. Please try again.'); return; }
+  }
+
   if (subpage === 'followers' || subpage === 'following') { await renderListPage(subpage); return; }
   await renderProfilePage();
 }
@@ -318,7 +333,7 @@ async function renderProfilePage() {
   const root = document.getElementById('prof-root');
   try {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const res     = await fetch(`/api/profile/${encodeURIComponent(targetId)}`, { headers });
+    const res     = await fetch(`/api/profile/${encodeURIComponent(resolvedId)}`, { headers });
     if (res.status === 404) { renderError('This user does not exist or their profile is private.'); return; }
     const u = await res.json();
     document.title = `${u.display_name} — Exon External`;
@@ -358,7 +373,10 @@ async function renderProfilePage() {
         : `<button id="follow-btn" class="prof-btn primary" onclick="toggleFollow(true)">Follow</button>`;
       actionHtml += `<button class="prof-btn danger" onclick="blockUser()">Block</button>`;
     }
-    if (isOwner) actionHtml = `<button id="edit-toggle-btn" class="prof-btn" onclick="toggleEdit()">Edit Profile</button>`;
+    // Copy profile link button always shown
+    const profileUrl = u.vanity ? `${location.origin}/u/${u.vanity}` : `${location.origin}/u/${resolvedId}`;
+    actionHtml += `<button class="prof-btn" onclick="copyProfileLink('${esc(profileUrl)}')" title="Copy profile link">🔗</button>`;
+    if (isOwner) actionHtml = `<button id="edit-toggle-btn" class="prof-btn" onclick="toggleEdit()">Edit Profile</button>` + actionHtml;
 
     // Member since card
     const ms = memberSince(u.created_at);
@@ -371,6 +389,13 @@ async function renderProfilePage() {
         <div class="prof-info-card-value">${esc(ms.label)}</div>
         <div class="prof-info-card-sub">${esc(ms.sub)}</div>
       </div>`;
+    if (isOwner && u.profile_views !== undefined) {
+      cardsHtml += `<div class="prof-info-card">
+        <div class="prof-info-card-icon">👁</div>
+        <div class="prof-info-card-label">Profile Views</div>
+        <div class="prof-info-card-value">${u.profile_views.toLocaleString()}</div>
+      </div>`;
+    }
 
     if (u.has_active_subscription !== undefined) {
       cardsHtml += `<div class="prof-info-card">
@@ -500,6 +525,13 @@ function editPanelHtml(u) {
     <div class="color-unlock-note" style="margin-top:4px">🎨 Profile color customization unlocks at VIP.</div>
   `;
 
+  const vanitySection = canColor ? `
+    <div class="edit-field">
+      <label class="edit-label">Vanity URL <span style="color:#5a6478;font-weight:400;text-transform:none;font-size:.7rem">exoncheats.com/u/yourname</span></label>
+      <input class="edit-input" id="edit-vanity" type="text" maxlength="24" value="${esc(u.vanity ?? '')}" placeholder="yourname" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+      <div class="edit-char-count">3–24 chars, a–z 0–9 _</div>
+    </div>` : '';
+
   const teamDescSection = fullColor ? `
     <div class="edit-field" style="margin-top:4px">
       <label class="edit-label">Team Description</label>
@@ -520,6 +552,7 @@ function editPanelHtml(u) {
       <div class="edit-char-count"><span id="bio-count">${(u.bio??'').length}</span>/200</div>
     </div>
     ${teamDescSection}
+    ${vanitySection}
     ${colorSection}
     <div class="edit-section-title" style="margin-top:20px">Privacy</div>
     <div class="privacy-grid">
@@ -592,9 +625,11 @@ async function saveProfile() {
   const privacy         = {};
   privKeys.forEach(k => { const el = document.getElementById(`priv-${k}`); if (el) privacy[k] = el.checked; });
 
+  const vanityEl = document.getElementById('edit-vanity');
   const msgEl = document.getElementById('edit-msg');
   const body  = { display_name, bio, privacy, accent_color: _selectedColor };
   if (team_description !== undefined) body.team_description = team_description;
+  if (vanityEl) body.vanity = vanityEl.value.trim() || null;
 
   try {
     const res = await fetch('/api/profile', {
@@ -614,13 +649,20 @@ async function saveProfile() {
   }
 }
 
+function copyProfileLink(url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.querySelector('.prof-btn[onclick^="copyProfileLink"]');
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 1500); }
+  });
+}
+
 // ── Follow / Block ────────────────────────────────────────────────────────────
 
 async function toggleFollow(doFollow) {
   const btn = document.getElementById('follow-btn');
   if (btn) btn.disabled = true;
   try {
-    const res = await fetch(`/api/follow/${encodeURIComponent(targetId)}`, {
+    const res = await fetch(`/api/follow/${encodeURIComponent(resolvedId)}`, {
       method: doFollow ? 'POST' : 'DELETE', headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) await renderProfilePage(); else if (btn) btn.disabled = false;
@@ -630,7 +672,7 @@ async function toggleFollow(doFollow) {
 async function blockUser() {
   if (!confirm('Block this user? They will no longer be able to see your profile.')) return;
   try {
-    await fetch(`/api/block/${encodeURIComponent(targetId)}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    await fetch(`/api/block/${encodeURIComponent(resolvedId)}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     window.location.href = '/';
   } catch {}
 }
