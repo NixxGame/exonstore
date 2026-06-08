@@ -1259,6 +1259,8 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
     accent_color:       user.accent_color ?? null,
     team_description:   user.team_description ?? null,
     vanity:             user.vanity ?? null,
+    hero_pattern:       user.hero_pattern ?? 'grid',
+    social_links:       user.social_links ?? {},
     profile_views:      isOwner ? (cfUser?.profile_views ?? 0) : undefined,
     mutual_count,
     can_edit_color:     COLOR_ROLES.has(user.role ?? 'member'),
@@ -1322,7 +1324,7 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
 // ── API: update profile ───────────────────────────────────────────────────────
 
 app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, res) => {
-  const { display_name, bio, privacy, accent_color, team_description } = req.body ?? {};
+  const { display_name, bio, privacy, accent_color, team_description, hero_pattern, social_links } = req.body ?? {};
   let cfUser = await cfRead(`user:${req.discordId}`);
   if (!cfUser) {
     const dbUser = db.getUser(req.discordId);
@@ -1363,6 +1365,24 @@ app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, r
     if (FULL_COLOR_ROLES.has(role)) {
       cfUser.team_description = sanitizeText(team_description, 600);
     }
+  }
+
+  // Hero pattern
+  const VALID_PATTERNS = new Set(['grid', 'dots', 'diagonal', 'cross', 'none']);
+  if (hero_pattern !== undefined && VALID_PATTERNS.has(hero_pattern)) {
+    cfUser.hero_pattern = hero_pattern;
+  }
+
+  // Social links — validated against known platforms, max 100 chars each
+  const SOCIAL_KEYS = new Set(['twitter','discord','youtube','twitch','spotify','steam','github','tiktok','instagram']);
+  if (social_links && typeof social_links === 'object') {
+    const cleaned = {};
+    for (const [k, v] of Object.entries(social_links)) {
+      if (!SOCIAL_KEYS.has(k)) continue;
+      const val = sanitizeText(v, 100);
+      if (val) cleaned[k] = val;
+    }
+    cfUser.social_links = cleaned;
   }
 
   // Vanity URL — VIP+ only, alphanumeric + underscores, 3-24 chars

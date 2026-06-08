@@ -40,7 +40,15 @@
       transition: background .4s;
     }
     .prof-hero-glow { position: absolute; inset: 0; background: radial-gradient(ellipse 70% 120% at 50% 100%, var(--hero-glow, rgba(240,122,18,.18)) 0%, transparent 70%); transition: background .4s; }
-    .prof-hero-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px); background-size: 40px 40px; mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.5) 60%, rgba(0,0,0,.1) 100%); }
+    .prof-hero-grid { position: absolute; inset: 0; mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.5) 60%, rgba(0,0,0,.1) 100%); }
+
+    /* ── PATTERN PICKER ── */
+    .pattern-presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .pattern-preset { width: 52px; height: 36px; border-radius: 8px; cursor: pointer; border: 2px solid rgba(255,255,255,.08); background: #06080d; overflow: hidden; position: relative; transition: all .15s; flex-shrink: 0; }
+    .pattern-preset:hover { border-color: rgba(255,255,255,.2); transform: scale(1.05); }
+    .pattern-preset.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(240,122,18,.25); }
+    .pattern-preset-inner { position: absolute; inset: 0; }
+    .pattern-preset-label { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-size: .55rem; color: #5a6478; font-weight: 600; letter-spacing: .04em; }
     .prof-hero-orb { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; }
     .prof-hero-orb-1 { width: 340px; height: 340px; top: -100px; left: 8%; background: var(--orb1-color, rgba(240,122,18,.12)); transition: background .4s; }
     .prof-hero-orb-2 { width: 220px; height: 220px; top: -70px; right: 12%; background: var(--orb2-color, rgba(139,92,246,.08)); transition: background .4s; }
@@ -197,6 +205,19 @@
     .color-picker-hex:focus { border-color: rgba(240,122,18,.4); }
     .color-unlock-note { font-size: .74rem; color: #5a6478; margin-top: 6px; }
 
+    /* ── SOCIAL LINKS ── */
+    .prof-socials { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .prof-social-btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 9px; font-size: .8rem; font-weight: 600; text-decoration: none; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.04); color: #a0a8b8; transition: all .15s; }
+    .prof-social-btn:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.16); color: #eef0f6; transform: translateY(-1px); }
+    .prof-social-btn svg { flex-shrink: 0; }
+    .social-inputs { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+    .social-input-row { display: flex; align-items: center; gap: 10px; }
+    .social-input-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #5a6478; }
+    .social-input-field { flex: 1; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 9px; color: #eef0f6; padding: 8px 12px; font-size: .84rem; outline: none; transition: border-color .15s; }
+    .social-input-field:focus { border-color: rgba(240,122,18,.4); background: rgba(240,122,18,.03); }
+    .social-input-field::placeholder { color: #3a4050; }
+    .social-input-label { width: 72px; font-size: .72rem; color: #5a6478; font-weight: 600; flex-shrink: 0; }
+
     /* ── USER LIST ── */
     .list-page-header { margin-bottom: 24px; }
     .list-page-title { font-size: 1.3rem; font-weight: 800; color: #fff; margin-bottom: 6px; }
@@ -287,6 +308,34 @@ function badgeHtml(badge) {
   return `<span class="prof-badge ${m.cls}">${m.emoji} ${m.label}</span>`;
 }
 
+const SOCIAL_PLATFORMS = {
+  twitter:   { label: 'X',         color: '#e7e9ea', url: v => `https://x.com/${v.replace('@','')}`,                     placeholder: '@handle',         icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
+  discord:   { label: 'Discord',   color: '#5865f2', url: v => `https://discord.gg/${v}`,                                placeholder: 'invite code',     icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 0 0-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 0 0-5.487 0 12.36 12.36 0 0 0-.617-1.23A.077.077 0 0 0 8.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 0 0-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 0 0 .031.055 20.03 20.03 0 0 0 5.993 2.98.078.078 0 0 0 .084-.026c.462-.62.874-1.275 1.226-1.963.021-.04.001-.088-.041-.104a13.201 13.201 0 0 1-1.872-.878.075.075 0 0 1-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 0 1 .078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 0 1 .079.009c.12.098.245.195.372.288a.075.075 0 0 1-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 0 0-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 0 0 .084.028 19.963 19.963 0 0 0 6.002-2.981.076.076 0 0 0 .032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 0 0-.031-.028z"/></svg>` },
+  youtube:   { label: 'YouTube',   color: '#ff0000', url: v => `https://youtube.com/@${v.replace('@','')}`,              placeholder: '@channel',        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>` },
+  twitch:    { label: 'Twitch',    color: '#9147ff', url: v => `https://twitch.tv/${v}`,                                 placeholder: 'username',        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>` },
+  spotify:   { label: 'Spotify',   color: '#1db954', url: v => `https://open.spotify.com/user/${v}`,                    placeholder: 'user ID',         icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>` },
+  steam:     { label: 'Steam',     color: '#c7d5e0', url: v => `https://steamcommunity.com/id/${v}`,                    placeholder: 'profile ID',      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.606 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.497 1.009 2.452-.397.957-1.497 1.41-2.454 1.015zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/></svg>` },
+  github:    { label: 'GitHub',    color: '#f0f6fc', url: v => `https://github.com/${v}`,                               placeholder: 'username',        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>` },
+  tiktok:    { label: 'TikTok',    color: '#ee1d52', url: v => `https://tiktok.com/@${v.replace('@','')}`,              placeholder: '@username',       icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>` },
+  instagram: { label: 'Instagram', color: '#e1306c', url: v => `https://instagram.com/${v.replace('@','')}`,           placeholder: 'username',        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>` },
+};
+
+const HERO_PATTERNS = {
+  grid:     'background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:40px 40px',
+  dots:     'background-image:radial-gradient(rgba(255,255,255,.08) 1.5px,transparent 1.5px);background-size:22px 22px',
+  diagonal: 'background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0,rgba(255,255,255,.04) 1px,transparent 0,transparent 50%);background-size:18px 18px',
+  cross:    'background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:18px 18px',
+  none:     'background-image:none',
+};
+
+const PATTERN_LABELS = { grid: 'Grid', dots: 'Dots', diagonal: 'Lines', cross: 'Fine', none: 'None' };
+
+function applyHeroPattern(pattern) {
+  const el = document.getElementById('prof-hero-grid');
+  if (!el) return;
+  el.style.cssText = HERO_PATTERNS[pattern] ?? HERO_PATTERNS.grid;
+}
+
 function applyAccentColor(hex) {
   if (!hex) { document.documentElement.style.removeProperty('--hero-glow'); document.documentElement.style.removeProperty('--orb1-color'); document.documentElement.style.removeProperty('--orb2-color'); return; }
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
@@ -338,8 +387,9 @@ async function renderProfilePage() {
     const u = await res.json();
     document.title = `${u.display_name} — Exon External`;
 
-    // Apply accent color to hero
+    // Apply accent color and pattern to hero
     if (u.accent_color) applyAccentColor(u.accent_color);
+    applyHeroPattern(u.hero_pattern ?? 'grid');
 
     const isOwner  = u.is_owner ?? false;
     const lastSeen = u.last_seen ? relTime(u.last_seen) : null;
@@ -454,7 +504,7 @@ async function renderProfilePage() {
 
     root.innerHTML = `
       <div class="prof-hero">
-        <div class="prof-hero-grid"></div>
+        <div class="prof-hero-grid" id="prof-hero-grid"></div>
         <div class="prof-hero-glow"></div>
         <div class="prof-hero-orb prof-hero-orb-1"></div>
         <div class="prof-hero-orb prof-hero-orb-2"></div>
@@ -472,6 +522,7 @@ async function renderProfilePage() {
           <div class="prof-handle">@${esc(u.username)}</div>
           ${badgesHtml ? `<div class="prof-badges">${badgesHtml}</div>` : ''}
           ${u.bio ? `<div class="prof-bio">${esc(u.bio)}</div>` : ''}
+          ${socialLinksHtml(u.social_links ?? {})}
           <div class="prof-stats-row">
             <div class="prof-stat">${followersHtml}</div>
             <div class="prof-stat-divider"></div>
@@ -509,6 +560,16 @@ function editPanelHtml(u) {
       <label class="toggle"><input type="checkbox" id="priv-${key}" ${p[key]?'checked':''}><span class="toggle-slider"></span></label>
     </div>`;
   }
+
+  const patternSection = `
+    <div class="edit-section-title" style="margin-top:20px">Hero Pattern</div>
+    <div class="pattern-presets" id="pattern-presets">
+      ${Object.entries(HERO_PATTERNS).map(([key, css]) => `
+        <div class="pattern-preset ${(u.hero_pattern??'grid')===key?'selected':''}" data-pattern="${key}" onclick="selectPattern('${key}')" title="${PATTERN_LABELS[key]}">
+          <div class="pattern-preset-inner" style="${css};opacity:.7"></div>
+          <div class="pattern-preset-label">${PATTERN_LABELS[key]}</div>
+        </div>`).join('')}
+    </div>`;
 
   const colorSection = canColor ? `
     <div class="edit-section-title" style="margin-top:20px">Profile Color ${fullColor ? '' : '<span style="color:#f472b6;font-size:.65rem">VIP</span>'}</div>
@@ -553,7 +614,17 @@ function editPanelHtml(u) {
     </div>
     ${teamDescSection}
     ${vanitySection}
+    ${patternSection}
     ${colorSection}
+    <div class="edit-section-title" style="margin-top:20px">Social Links</div>
+    <div class="social-inputs">
+      ${Object.entries(SOCIAL_PLATFORMS).map(([k, p]) => `
+        <div class="social-input-row">
+          <div class="social-input-icon" style="color:${p.color}">${p.icon}</div>
+          <div class="social-input-label">${p.label}</div>
+          <input class="social-input-field" id="social-${k}" type="text" placeholder="${p.placeholder}" value="${esc((u.social_links ?? {})[k] ?? '')}">
+        </div>`).join('')}
+    </div>
     <div class="edit-section-title" style="margin-top:20px">Privacy</div>
     <div class="privacy-grid">
       ${row('show_subscription',   'Show subscription status', 'Visitors can see if you have an active subscription')}
@@ -570,17 +641,26 @@ function editPanelHtml(u) {
   </div>`;
 }
 
-let _selectedColor = null;
+let _selectedColor   = null;
+let _selectedPattern = 'grid';
 
 function wireEditPanel(u) {
-  _selectedColor = u.accent_color ?? null;
-  // Mark current preset as selected
+  _selectedColor   = u.accent_color ?? null;
+  _selectedPattern = u.hero_pattern ?? 'grid';
   document.querySelectorAll('.color-preset[data-color]').forEach(el => {
     el.classList.toggle('selected', el.dataset.color === _selectedColor);
   });
   if (_selectedColor === null) {
     document.getElementById('color-reset')?.classList.add('selected');
   }
+}
+
+function selectPattern(key) {
+  _selectedPattern = key;
+  document.querySelectorAll('.pattern-preset').forEach(el => {
+    el.classList.toggle('selected', el.dataset.pattern === key);
+  });
+  applyHeroPattern(key);
 }
 
 function selectColor(hex) {
@@ -625,9 +705,16 @@ async function saveProfile() {
   const privacy         = {};
   privKeys.forEach(k => { const el = document.getElementById(`priv-${k}`); if (el) privacy[k] = el.checked; });
 
+  // Collect social links
+  const social_links = {};
+  Object.keys(SOCIAL_PLATFORMS).forEach(k => {
+    const el = document.getElementById(`social-${k}`);
+    if (el) { const v = el.value.trim(); if (v) social_links[k] = v; }
+  });
+
   const vanityEl = document.getElementById('edit-vanity');
   const msgEl = document.getElementById('edit-msg');
-  const body  = { display_name, bio, privacy, accent_color: _selectedColor };
+  const body  = { display_name, bio, privacy, accent_color: _selectedColor, hero_pattern: _selectedPattern, social_links };
   if (team_description !== undefined) body.team_description = team_description;
   if (vanityEl) body.vanity = vanityEl.value.trim() || null;
 
@@ -647,6 +734,18 @@ async function saveProfile() {
   } catch {
     if (msgEl) { msgEl.textContent = 'Network error.'; msgEl.className = 'edit-msg err'; }
   }
+}
+
+function socialLinksHtml(links) {
+  const entries = Object.entries(links ?? {}).filter(([k, v]) => v && SOCIAL_PLATFORMS[k]);
+  if (!entries.length) return '';
+  const btns = entries.map(([k, v]) => {
+    const p = SOCIAL_PLATFORMS[k];
+    return `<a class="prof-social-btn" href="${esc(p.url(v))}" target="_blank" rel="noopener" style="--sc:${p.color}">
+      <span style="color:${p.color}">${p.icon}</span>${esc(p.label)}
+    </a>`;
+  }).join('');
+  return `<div class="prof-socials">${btns}</div>`;
 }
 
 function copyProfileLink(url) {
