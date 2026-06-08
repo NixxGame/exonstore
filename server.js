@@ -1019,12 +1019,24 @@ function requireAdmin(req, res, next) {
   if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Not authenticated' });
   const payload = verifyToken(auth.slice(7));
   if (!payload) return res.status(401).json({ error: 'Invalid token' });
-  const user = db.getUser(payload.sub);
-  if (!user || !['staff', 'developer'].includes(user.role)) {
-    return res.status(403).json({ error: 'Forbidden' });
+
+  // Check local DB first; fall back to CF KV (local DB is wiped on Render restart)
+  const localRole = db.getUser(payload.sub)?.role;
+  if (['staff', 'developer'].includes(localRole)) {
+    req.discordId = payload.sub;
+    return next();
   }
-  req.discordId = payload.sub;
-  next();
+
+  // Local DB empty (post-restart) — check CF KV
+  cfRead(`user:${payload.sub}`)
+    .then(cfUser => {
+      if (!['staff', 'developer'].includes(cfUser?.role)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      req.discordId = payload.sub;
+      next();
+    })
+    .catch(() => res.status(403).json({ error: 'Forbidden' }));
 }
 
 // GET /api/admin/keys?q=&page=1&limit=50
