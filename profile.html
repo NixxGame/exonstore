@@ -464,12 +464,14 @@ async function renderProfilePage() {
       </div>`;
     }
     if (u.time_remaining_ms !== undefined && u.time_remaining_ms > 0) {
-      const d = Math.floor(u.time_remaining_ms/86400000);
-      const h = Math.floor((u.time_remaining_ms%86400000)/3600000);
+      const LIFETIME_MS = 500000000 * 60000;
+      const timeVal = u.time_remaining_ms >= LIFETIME_MS
+        ? 'Lifetime ∞'
+        : (() => { const d = Math.floor(u.time_remaining_ms/86400000); const h = Math.floor((u.time_remaining_ms%86400000)/3600000); return (d>0?d+'d ':'')+h+'h'; })();
       cardsHtml += `<div class="prof-info-card">
         <div class="prof-info-card-icon">⏱</div>
         <div class="prof-info-card-label">Time Remaining</div>
-        <div class="prof-info-card-value" style="color:#f07a12">${d>0?d+'d ':''} ${h}h</div>
+        <div class="prof-info-card-value" style="color:#f07a12">${timeVal}</div>
       </div>`;
     }
 

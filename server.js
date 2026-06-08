@@ -1287,55 +1287,70 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
   };
 
   if (isOwner) {
-    // Owner: full data
-    const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
-    const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
-    const enriched = await Promise.all(userKeys.map(async k => {
-      const cf = await cfRead(k.key_value);
+    // Owner: full data — use CF KV linked_keys (persists across restarts)
+    const ownerLinkedKeys = cfUser?.linked_keys ?? [];
+    const enriched = await Promise.all(ownerLinkedKeys.map(async keyValue => {
+      const cf = await cfRead(keyValue);
       const tc = cf?.time_created ?? null;
       const ln = cf?.length ?? null;
-      return { key_value: k.key_value, plan: k.plan ?? '—', hwid: cf?.hwid ?? null,
+      return { key_value: keyValue, plan: cf?.plan ?? '—', hwid: cf?.hwid ?? null,
                time_created: tc, expires_at: tc && ln ? tc + ln * 60000 : null,
                length_min: ln, purchased_at: cf?.purchased_at ?? null };
     }));
+
+    // Compute time remaining for owner's own profile card
+    let ownerRemainingMs = 0;
+    for (const k of enriched) {
+      if (k.time_created && k.length_min) {
+        const rem = k.time_created + k.length_min * 60000 - Date.now();
+        if (rem > 0) ownerRemainingMs += rem;
+      } else if (k.length_min && !k.time_created) {
+        ownerRemainingMs += k.length_min * 60000;
+      }
+    }
+
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const notifications = (user.notifications ?? []).filter(n => n.created_at > thirtyDaysAgo);
     return res.json({
       ...base,
       privacy,
       keys:             enriched,
+      time_remaining_ms: ownerRemainingMs,
       notifications:    notifications,
       unread_count:     notifications.filter(n => !n.read).length,
       following:        user.following ?? [],
       blocked:          user.blocked ?? [],
-      last_seen:        user.last_seen ?? null, // owner always sees their own
+      last_seen:        user.last_seen ?? null,
     });
   }
 
   // Public view — apply privacy filters
+  // Use CF KV linked_keys (persists across restarts) instead of local db.json
   const pub = { ...base };
+  const linkedKeys = cfUser?.linked_keys ?? [];
+
   if (privacy.show_subscription) {
-    const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
-    const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
-    const cfKeys   = await Promise.all(userKeys.map(k => cfRead(k.key_value)));
-    pub.has_active_subscription = cfKeys.some(cf => cf?.time_created && cf?.length && Date.now() < cf.time_created + cf.length * 60000);
+    const cfKeys = await Promise.all(linkedKeys.map(k => cfRead(k)));
+    pub.has_active_subscription = cfKeys.some(cf =>
+      cf && cf.time_created && cf.length && Date.now() < cf.time_created + cf.length * 60000
+    );
   }
   if (privacy.show_time_remaining) {
-    const dbData   = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
-    const userKeys = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId);
     let combinedMs = 0;
-    for (const k of userKeys) {
-      const cf = await cfRead(k.key_value);
-      if (cf?.time_created && cf?.length) {
+    for (const keyValue of linkedKeys) {
+      const cf = await cfRead(keyValue);
+      if (!cf) continue;
+      if (cf.time_created && cf.length) {
         const rem = cf.time_created + cf.length * 60000 - Date.now();
         if (rem > 0) combinedMs += rem;
-      } else if (cf?.length && !cf?.time_created) combinedMs += cf.length * 60000;
+      } else if (cf.length && !cf.time_created) {
+        combinedMs += cf.length * 60000;
+      }
     }
     pub.time_remaining_ms = combinedMs;
   }
   if (privacy.show_key_count) {
-    const dbData = JSON.parse(require('fs').readFileSync('./data/db.json', 'utf8'));
-    pub.key_count = Object.values(dbData.keys ?? {}).filter(k => k.discord_id === req.params.discordId).length;
+    pub.key_count = linkedKeys.length;
   }
   res.json(pub);
 });
