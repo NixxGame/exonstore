@@ -757,15 +757,6 @@ async function renderActrlCoupons() {
   promos.forEach(p => { promoByName[p.coupon.id] = p.code; });
 
   body.innerHTML = `
-    <div class="actrl-section-title">Checkout Settings</div>
-    <div class="actrl-status-toggle" style="margin-bottom:20px">
-      <div style="font-size:1.2rem;flex-shrink:0">🔗</div>
-      <div style="flex:1">
-        <div style="font-size:.88rem;font-weight:600;color:#eef0f6">Customer-facing coupon codes</div>
-        <div style="font-size:.75rem;color:#7a8394">Stripe doesn't allow this to be toggled via API — manage it directly in the dashboard</div>
-      </div>
-      <a href="https://dashboard.stripe.com/pricing-tables/prctbl_1TdaqM2UtKaemIpmwVgBrMON" target="_blank" class="actrl-btn" style="white-space:nowrap;text-decoration:none">Open in Stripe ↗</a>
-    </div>
     <div class="actrl-section-title">Create Coupon</div>
     <div class="actrl-card">
       <div>
