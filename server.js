@@ -561,9 +561,15 @@ app.get('/api/stats', looseLimit, (req, res) => {
 const DISCORD_ROLE_MAP = () => [
   { name: 'developer', id: process.env.DISCORD_ROLE_DEVELOPER },
   { name: 'staff',     id: process.env.DISCORD_ROLE_STAFF },
+  { name: 'vip',       id: '1513352322116485310' },
   { name: 'customer',  id: process.env.DISCORD_ROLE_CUSTOMER },
   { name: 'member',    id: process.env.DISCORD_ROLE_MEMBER },
 ];
+
+// Roles that can customize accent color (vip and above)
+const COLOR_ROLES = new Set(['vip', 'staff', 'developer']);
+// Roles that get full color picker vs preset-only
+const FULL_COLOR_ROLES = new Set(['staff', 'developer']);
 
 async function getHighestDiscordRole(discordId) {
   // Owner always gets developer
@@ -1133,22 +1139,36 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
   const autoBadges = hasOneYear(user.created_at) ? ['1_year_member'] : [];
   const allBadges  = [...new Set([...(user.badges ?? []), ...autoBadges])];
 
+  // Mutual followers (viewers who are logged in)
+  let mutual_count = 0;
+  if (requesterId && !isOwner) {
+    const cfRequester = await cfRead(`user:${requesterId}`);
+    const requesterFollowing = cfRequester?.following ?? [];
+    const targetFollowers    = user.followers ?? [];
+    mutual_count = requesterFollowing.filter(id => targetFollowers.includes(id)).length;
+  }
+
   const base = {
-    discord_id:      user.discord_id,
-    username:        user.username,
-    display_name:    user.display_name ?? user.username,
-    avatar:          user.avatar,
-    bio:             user.bio ?? '',
-    role:            user.role ?? 'member',
-    created_at:      user.created_at,
-    badges:          allBadges,
-    follower_count:  (user.followers ?? []).length,
-    following_count: (user.following ?? []).length,
+    discord_id:         user.discord_id,
+    username:           user.username,
+    display_name:       user.display_name ?? user.username,
+    avatar:             user.avatar,
+    bio:                user.bio ?? '',
+    role:               user.role ?? 'member',
+    created_at:         user.created_at,
+    badges:             allBadges,
+    follower_count:     (user.followers ?? []).length,
+    following_count:    (user.following ?? []).length,
     show_follower_count: privacy.show_follower_count ?? false,
-    is_owner:        isOwner,
-    is_following:    requesterId ? (user.followers ?? []).includes(requesterId) : false,
-    is_blocked_by_you: requesterId ? (user.blocked ?? []).includes(requesterId) : false,
-    last_seen:       (privacy.show_online_status && user.last_seen) ? user.last_seen : null,
+    is_owner:           isOwner,
+    is_following:       requesterId ? (user.followers ?? []).includes(requesterId) : false,
+    is_blocked_by_you:  requesterId ? (user.blocked ?? []).includes(requesterId) : false,
+    last_seen:          (privacy.show_online_status && user.last_seen) ? user.last_seen : null,
+    accent_color:       user.accent_color ?? null,
+    team_description:   user.team_description ?? null,
+    mutual_count,
+    can_edit_color:     COLOR_ROLES.has(user.role ?? 'member'),
+    full_color:         FULL_COLOR_ROLES.has(user.role ?? 'member'),
   };
 
   if (isOwner) {
@@ -1208,10 +1228,9 @@ app.get('/api/profile/:discordId', looseLimit, async (req, res) => {
 // ── API: update profile ───────────────────────────────────────────────────────
 
 app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, res) => {
-  const { display_name, bio, privacy } = req.body ?? {};
+  const { display_name, bio, privacy, accent_color, team_description } = req.body ?? {};
   let cfUser = await cfRead(`user:${req.discordId}`);
   if (!cfUser) {
-    // CF KV record doesn't exist yet — bootstrap it from local DB
     const dbUser = db.getUser(req.discordId);
     if (!dbUser) return res.status(404).json({ error: 'User not found' });
     cfUser = { ...dbUser, linked_keys: db.getUserKeys(req.discordId).map(k => k.key_value) };
@@ -1224,6 +1243,34 @@ app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, r
     cfUser.privacy = cfUser.privacy ?? {};
     allowed.forEach(k => { if (k in privacy) cfUser.privacy[k] = !!privacy[k]; });
   }
+
+  // Accent color — only allowed for VIP+
+  if (accent_color !== undefined) {
+    const dbUser = db.getUser(req.discordId);
+    const role   = dbUser?.role ?? cfUser.role ?? 'member';
+    if (COLOR_ROLES.has(role)) {
+      if (accent_color === null) {
+        cfUser.accent_color = null;
+      } else {
+        // Validate hex color
+        const hex = String(accent_color).trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+          // VIP gets preset colors only (enforced client-side; server allows any valid hex from allowed list)
+          cfUser.accent_color = hex;
+        }
+      }
+    }
+  }
+
+  // Team description — only staff/developer can set their own
+  if (team_description !== undefined) {
+    const dbUser = db.getUser(req.discordId);
+    const role   = dbUser?.role ?? cfUser.role ?? 'member';
+    if (FULL_COLOR_ROLES.has(role)) {
+      cfUser.team_description = sanitizeText(team_description, 120);
+    }
+  }
+
   await cfWrite(`user:${req.discordId}`, cfUser);
   res.json({ success: true });
 });

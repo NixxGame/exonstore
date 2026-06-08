@@ -1024,7 +1024,8 @@ footer {
 }
 .nav-role-dot[data-role="member"]    { background: #6b7280; }
 .nav-role-dot[data-role="customer"]  { background: var(--orange); }
-.nav-role-dot[data-role="staff"]     { background: #4a90d9; }
+.nav-role-dot[data-role="vip"]       { background: #fbbf24; }
+.nav-role-dot[data-role="staff"]     { background: #60a5fa; }
 .nav-role-dot[data-role="developer"] { background: #9b59b6; }
 
 /* ── PROFILE CARD ── */
@@ -1095,8 +1096,9 @@ footer {
 
 /* ring color by role */
 .profile-card[data-role="member"]    .profile-avatar-ring { border-color: rgba(107,114,128,.5); }
-.profile-card[data-role="customer"]  .profile-avatar-ring { border-color: rgba(240,122,18,.6); box-shadow: 0 0 16px rgba(240,122,18,.25); }
-.profile-card[data-role="staff"]     .profile-avatar-ring { border-color: rgba(74,144,217,.6);  box-shadow: 0 0 16px rgba(74,144,217,.25); }
+.profile-card[data-role="customer"]  .profile-avatar-ring { border-color: rgba(240,122,18,.6);  box-shadow: 0 0 16px rgba(240,122,18,.25); }
+.profile-card[data-role="vip"]       .profile-avatar-ring { border-color: rgba(251,191,36,.6);  box-shadow: 0 0 16px rgba(251,191,36,.25); }
+.profile-card[data-role="staff"]     .profile-avatar-ring { border-color: rgba(96,165,250,.6);  box-shadow: 0 0 16px rgba(96,165,250,.25); }
 .profile-card[data-role="developer"] .profile-avatar-ring { border-color: rgba(155,89,182,.6);  box-shadow: 0 0 16px rgba(155,89,182,.25); }
 
 .profile-body {
@@ -1125,10 +1127,11 @@ footer {
   margin-bottom: 14px;
 }
 
-.profile-role-badge[data-role="member"]    { background: rgba(107,114,128,.15); color: #9ca3af; border: 1px solid rgba(107,114,128,.25); }
-.profile-role-badge[data-role="customer"]  { background: var(--orange-dim); color: var(--orange-lt); border: 1px solid rgba(240,122,18,.3); }
-.profile-role-badge[data-role="staff"]     { background: rgba(74,144,217,.12); color: #7ab8f5; border: 1px solid rgba(74,144,217,.3); }
-.profile-role-badge[data-role="developer"] { background: rgba(155,89,182,.12); color: #c39bd3; border: 1px solid rgba(155,89,182,.3); }
+.profile-role-badge[data-role="member"]    { background: rgba(107,114,128,.15); color: #9ca3af;  border: 1px solid rgba(107,114,128,.25); }
+.profile-role-badge[data-role="customer"]  { background: var(--orange-dim);    color: var(--orange-lt); border: 1px solid rgba(240,122,18,.3); }
+.profile-role-badge[data-role="vip"]       { background: rgba(251,191,36,.12); color: #fbbf24;  border: 1px solid rgba(251,191,36,.3); }
+.profile-role-badge[data-role="staff"]     { background: rgba(96,165,250,.12); color: #93c5fd;  border: 1px solid rgba(96,165,250,.3); }
+.profile-role-badge[data-role="developer"] { background: rgba(155,89,182,.12); color: #c39bd3;  border: 1px solid rgba(155,89,182,.3); }
 
 /* All roles row */
 .profile-roles {
@@ -1147,9 +1150,10 @@ footer {
 }
 
 .role-tag[data-role="member"]    { background: rgba(107,114,128,.12); color: #6b7280; }
-.role-tag[data-role="customer"]  { background: var(--orange-dim); color: var(--orange); }
-.role-tag[data-role="staff"]     { background: rgba(74,144,217,.1); color: #4a90d9; }
-.role-tag[data-role="developer"] { background: rgba(155,89,182,.1); color: #9b59b6; }
+.role-tag[data-role="customer"]  { background: var(--orange-dim);    color: var(--orange); }
+.role-tag[data-role="vip"]       { background: rgba(251,191,36,.1);  color: #fbbf24; }
+.role-tag[data-role="staff"]     { background: rgba(96,165,250,.1);  color: #60a5fa; }
+.role-tag[data-role="developer"] { background: rgba(155,89,182,.1);  color: #9b59b6; }
 
 /* Divider */
 .profile-divider {
