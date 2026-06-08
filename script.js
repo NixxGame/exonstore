@@ -579,6 +579,21 @@ async function loadStatusBanner() {
 
 loadStatusBanner();
 
+async function loadLoaderInfo() {
+  try {
+    const r = await fetch('/api/loader/info');
+    if (!r.ok) return;
+    const d = await r.json();
+    const ver = document.getElementById('dl-version');
+    const lnk = document.getElementById('dl-link');
+    const sz  = document.getElementById('dl-size');
+    if (ver) ver.textContent = 'v' + (d.version ?? '');
+    if (lnk && d.url) lnk.href = d.url;
+    if (sz)  sz.textContent = d.size_mb ? d.size_mb + ' MB' : '';
+  } catch {}
+}
+if (document.getElementById('dl-version')) loadLoaderInfo();
+
 // Also show announcements on dashboard if present
 async function loadAnnouncements() {
   try {

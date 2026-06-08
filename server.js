@@ -1196,6 +1196,15 @@ app.post('/api/admin/users/:discordId/ban', requireAdmin, express.json(), async 
 // Loader checks this on every launch. Change LOADER_VERSION + LOADER_DOWNLOAD_URL
 // in your .env to push an update to all clients automatically.
 
+// Public endpoint — version + download URL for the website download page
+app.get('/api/loader/info', looseLimit, (req, res) => {
+  res.json({
+    version:    process.env.LOADER_VERSION      ?? '1.0.0',
+    url:        process.env.LOADER_DOWNLOAD_URL ?? '',
+    size_mb:    process.env.LOADER_SIZE_MB      ?? '',
+  });
+});
+
 app.get('/api/loader/version', looseLimit, (req, res) => {
   const auth = req.headers.authorization ?? '';
   if (auth !== `Bearer ${process.env.LOADER_SECRET}`) {
