@@ -265,6 +265,19 @@ async function addLinkedKeyToCF(discordId, keyValue) {
   }
 }
 
+async function updateSearchIndex(discordId, username, avatarUrl) {
+  try {
+    const index = (await cfRead('search_index')) ?? [];
+    const existing = index.findIndex(u => u.discord_id === discordId);
+    const entry = { discord_id: discordId, username, avatar: avatarUrl };
+    if (existing >= 0) index[existing] = { ...index[existing], ...entry };
+    else index.push(entry);
+    await cfWrite('search_index', index);
+  } catch (err) {
+    console.error('search index update failed:', err.message);
+  }
+}
+
 async function removeLinkedKeyFromCF(discordId, keyValue) {
   const user = await cfRead(`user:${discordId}`);
   if (!user) return;
@@ -484,6 +497,7 @@ app.get('/auth/discord/callback', async (req, res) => {
 
     db.upsertUser(id, username, avatarUrl);
     writeUserToCF(db.getUser(id));
+    updateSearchIndex(id, username, avatarUrl).catch(() => {});
 
     // Auto-join Discord server
     const guildId  = process.env.DISCORD_GUILD_ID;
@@ -1386,25 +1400,34 @@ app.get('/api/search', looseLimit, async (req, res) => {
   const q = sanitizeText(req.query.q ?? '', 50).toLowerCase();
   if (q.length < 2) return res.json({ results: [] });
 
-  const allUsers = db.getAllUsers();
-  const matched  = allUsers
+  // Search CF KV index first (persists across restarts), fall back to local DB
+  const cfIndex  = (await cfRead('search_index')) ?? [];
+  const dbUsers  = db.getAllUsers();
+
+  // Merge: CF index as base, local DB updates on top
+  const merged = new Map();
+  cfIndex.forEach(u => merged.set(u.discord_id, u));
+  dbUsers.forEach(u => merged.set(u.discord_id, { ...merged.get(u.discord_id), ...u }));
+
+  const matched = [...merged.values()]
     .filter(u => {
-      const name = (u.display_name ?? u.username ?? '').toLowerCase();
+      const name   = (u.display_name ?? u.username ?? '').toLowerCase();
       const handle = (u.username ?? '').toLowerCase();
       return name.includes(q) || handle.includes(q);
     })
     .slice(0, 20);
 
-  // Enrich with CF data for display_name/badges
+  // Enrich with CF user record for display_name/badges/role
   const results = await Promise.all(matched.map(async u => {
     const cf = await cfRead(`user:${u.discord_id}`);
+    const dbUser = db.getUser(u.discord_id);
     return {
       discord_id:   u.discord_id,
       username:     u.username,
       display_name: cf?.display_name ?? u.username,
-      avatar:       u.avatar,
-      role:         u.role ?? 'member',
-      badges:       [...(cf?.badges ?? []), ...(hasOneYear(u.created_at) ? ['1_year_member'] : [])],
+      avatar:       u.avatar ?? cf?.avatar,
+      role:         dbUser?.role ?? cf?.role ?? 'member',
+      badges:       [...(cf?.badges ?? []), ...(hasOneYear(u.created_at ?? cf?.created_at) ? ['1_year_member'] : [])],
     };
   }));
 
