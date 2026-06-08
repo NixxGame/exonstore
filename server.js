@@ -1331,7 +1331,7 @@ app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, r
   }
 
   if (display_name !== undefined) cfUser.display_name = sanitizeText(display_name, 32);
-  if (bio !== undefined)          cfUser.bio           = sanitizeText(bio, 200);
+  if (bio !== undefined)          cfUser.bio           = sanitizeText(bio, 600);
   if (privacy && typeof privacy === 'object') {
     const allowed = ['show_subscription','show_time_remaining','show_key_count','show_follower_count','show_online_status'];
     cfUser.privacy = cfUser.privacy ?? {};
@@ -1361,7 +1361,7 @@ app.post('/api/profile', strictLimit, requireAuth, express.json(), async (req, r
     const dbUser = db.getUser(req.discordId);
     const role   = dbUser?.role ?? cfUser.role ?? 'member';
     if (FULL_COLOR_ROLES.has(role)) {
-      cfUser.team_description = sanitizeText(team_description, 120);
+      cfUser.team_description = sanitizeText(team_description, 600);
     }
   }
 

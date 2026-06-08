@@ -535,8 +535,8 @@ function editPanelHtml(u) {
   const teamDescSection = fullColor ? `
     <div class="edit-field" style="margin-top:4px">
       <label class="edit-label">Team Description</label>
-      <textarea class="edit-input" id="edit-team-desc" maxlength="120" placeholder="Describe your role on the team…" oninput="countChars('edit-team-desc','td-count',120)">${esc(u.team_description ?? '')}</textarea>
-      <div class="edit-char-count"><span id="td-count">${(u.team_description??'').length}</span>/120</div>
+      <textarea class="edit-input" id="edit-team-desc" maxlength="600" placeholder="Describe your role on the team…" oninput="countChars('edit-team-desc','td-count',600)">${esc(u.team_description ?? '')}</textarea>
+      <div class="edit-char-count"><span id="td-count">${(u.team_description??'').length}</span>/600</div>
     </div>` : '';
 
   return `<div class="edit-panel" id="edit-panel">
@@ -548,8 +548,8 @@ function editPanelHtml(u) {
     </div>
     <div class="edit-field">
       <label class="edit-label">Bio</label>
-      <textarea class="edit-input" id="edit-bio" maxlength="200" placeholder="Tell others about yourself" oninput="countChars('edit-bio','bio-count',200)">${esc(u.bio??'')}</textarea>
-      <div class="edit-char-count"><span id="bio-count">${(u.bio??'').length}</span>/200</div>
+      <textarea class="edit-input" id="edit-bio" maxlength="600" placeholder="Tell others about yourself" oninput="countChars('edit-bio','bio-count',600)">${esc(u.bio??'')}</textarea>
+      <div class="edit-char-count"><span id="bio-count">${(u.bio??'').length}</span>/600</div>
     </div>
     ${teamDescSection}
     ${vanitySection}
