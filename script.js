@@ -650,6 +650,7 @@ async function renderActrlAnnouncements() {
           <option value="update">Update</option>
           <option value="warning">Warning</option>
           <option value="downtime">Downtime</option>
+          <option value="promo">Promo</option>
         </select>
       </div>
       <div>
