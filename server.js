@@ -1698,7 +1698,11 @@ async function cfListAllKeys() {
 async function restoreAllFromCF() {
   console.log('Restoring keys from CF...');
   const allCFKeys = await cfListAllKeys();
-  const keyNames  = allCFKeys.filter(k => !k.startsWith('user:'));
+  const keyNames  = allCFKeys.filter(k =>
+    !k.startsWith('user:') &&
+    !k.startsWith('vanity:') &&
+    k !== 'search_index'
+  );
   let restored = 0;
 
   await Promise.all(keyNames.map(async kv => {
