@@ -1758,9 +1758,9 @@ app.get('/api/admin/coupons', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/coupons  { name, percent_off | amount_off, max_redemptions, duration }
+// POST /api/admin/coupons  { name, percent_off | amount_off, max_redemptions, duration, first_time_only }
 app.post('/api/admin/coupons', requireAdmin, express.json(), async (req, res) => {
-  const { name, percent_off, amount_off, max_redemptions, duration = 'once' } = req.body ?? {};
+  const { name, percent_off, amount_off, max_redemptions, duration = 'once', first_time_only } = req.body ?? {};
   if (!name) return res.status(400).json({ error: 'name required' });
   if (!percent_off && !amount_off) return res.status(400).json({ error: 'percent_off or amount_off required' });
   try {
@@ -1773,7 +1773,11 @@ app.post('/api/admin/coupons', requireAdmin, express.json(), async (req, res) =>
       ...(max_redemptions ? { max_redemptions: parseInt(max_redemptions) } : {}),
     });
     const code  = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const promo = await stripeTest.promotionCodes.create({ coupon: coupon.id, code });
+    const promo = await stripeTest.promotionCodes.create({
+      coupon: coupon.id,
+      code,
+      ...(first_time_only ? { restrictions: { first_time_transaction: true } } : {}),
+    });
     res.json({ success: true, coupon_id: coupon.id, promo_code: promo.code });
   } catch (e) {
     res.status(500).json({ error: e.message });

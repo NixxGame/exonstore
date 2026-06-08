@@ -787,6 +787,10 @@ async function renderActrlCoupons() {
           </select>
         </div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.82rem;color:#a0a8bc;margin-top:2px">
+        <input type="checkbox" id="cp-first" style="width:14px;height:14px;accent-color:#f07a12;flex-shrink:0">
+        First purchase only <span style="font-size:.72rem;color:#5a6478">(Stripe restricts to new customers)</span>
+      </label>
       <button class="actrl-btn primary" onclick="createCoupon()">Create Coupon</button>
       <div id="cp-result" style="font-size:.8rem;display:none"></div>
     </div>
@@ -797,10 +801,12 @@ async function renderActrlCoupons() {
         const code = promoByName[c.id] ?? '—';
         const redeemed = c.times_redeemed ?? 0;
         const max = c.max_redemptions ?? '∞';
+        const promo = promos.find(p => p.coupon.id === c.id);
+        const firstOnly = promo?.restrictions?.first_time_transaction ? ' · 🆕 first purchase only' : '';
         return `<div class="actrl-coupon-row">
           <div>
             <div class="actrl-coupon-code">${escHtml(code)}</div>
-            <div class="actrl-coupon-info">${discount} · ${redeemed}/${max} used · ${c.duration}</div>
+            <div class="actrl-coupon-info">${discount} · ${redeemed}/${max} used · ${c.duration}${firstOnly}</div>
           </div>
           <button class="actrl-btn danger" onclick="deleteCoupon('${c.id}')">Delete</button>
         </div>`;
@@ -817,9 +823,10 @@ async function createCoupon() {
   if (!name) return alert('Code required');
   if (!pct && !amt) return alert('Enter % off or $ off');
   const res = document.getElementById('cp-result');
+  const firstOnly = document.getElementById('cp-first').checked;
   const r = await fetch('/api/admin/coupons', {
     method: 'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-    body: JSON.stringify({ name, ...(pct ? {percent_off:parseFloat(pct)} : {amount_off:parseFloat(amt)}), max_redemptions:max||undefined, duration:dur }),
+    body: JSON.stringify({ name, ...(pct ? {percent_off:parseFloat(pct)} : {amount_off:parseFloat(amt)}), max_redemptions:max||undefined, duration:dur, first_time_only:firstOnly }),
   });
   const d = await r.json();
   if (!r.ok) { res.style.cssText='display:block;color:#ef4444'; res.textContent='Error: '+d.error; return; }
