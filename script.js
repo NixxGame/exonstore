@@ -15,8 +15,8 @@
 
 const API = ''; // empty = same origin; set to 'https://your-server.com' if hosted separately
 
-const ROLE_ORDER = ['member', 'customer', 'staff', 'developer'];
-const ROLE_LABELS = { member: 'Member', customer: 'Customer', staff: 'Staff', developer: 'Developer' };
+const ROLE_ORDER = ['member', 'customer', 'vip', 'staff', 'developer'];
+const ROLE_LABELS = { member: 'Member', customer: 'Customer', vip: 'VIP', staff: 'Staff', developer: 'Developer' };
 
 
 // On load: grab token from URL (after Discord OAuth redirect) or localStorage
