@@ -747,16 +747,31 @@ async function saveStatus() {
 async function renderActrlCoupons() {
   const token = localStorage.getItem('exon_token');
   const body  = document.getElementById('actrl-body');
-  let coupons = [], promos = [];
+  let coupons = [], promos = [], promoCodesEnabled = false;
   try {
-    const r = await fetch('/api/admin/coupons', { headers:{ Authorization:`Bearer ${token}` }});
-    if (r.ok) { const d = await r.json(); coupons = d.coupons; promos = d.promo_codes; }
+    const [cr, ptr] = await Promise.all([
+      fetch('/api/admin/coupons', { headers:{ Authorization:`Bearer ${token}` }}),
+      fetch('/api/admin/pricing-table', { headers:{ Authorization:`Bearer ${token}` }}),
+    ]);
+    if (cr.ok)  { const d = await cr.json();  coupons = d.coupons; promos = d.promo_codes; }
+    if (ptr.ok) { const d = await ptr.json(); promoCodesEnabled = d.allow_promotion_codes; }
   } catch {}
 
   const promoByName = {};
   promos.forEach(p => { promoByName[p.coupon.id] = p.code; });
 
   body.innerHTML = `
+    <div class="actrl-section-title">Checkout Settings</div>
+    <div class="actrl-status-toggle" style="margin-bottom:20px">
+      <div class="actrl-toggle-track ${promoCodesEnabled ? 'on' : ''}" id="promo-toggle" onclick="promoToggleClick()">
+        <div class="actrl-toggle-thumb"></div>
+      </div>
+      <div>
+        <div style="font-size:.88rem;font-weight:600;color:#eef0f6">Use customer-facing coupon codes</div>
+        <div style="font-size:.75rem;color:#7a8394">Shows a promo code field on the Stripe checkout page</div>
+      </div>
+      <div id="promo-toggle-saving" style="font-size:.75rem;color:#7a8394;margin-left:auto;display:none">Saving…</div>
+    </div>
     <div class="actrl-section-title">Create Coupon</div>
     <div class="actrl-card">
       <div>
@@ -811,6 +826,24 @@ async function renderActrlCoupons() {
           <button class="actrl-btn danger" onclick="deleteCoupon('${c.id}')">Delete</button>
         </div>`;
       }).join('')}`;
+}
+
+async function promoToggleClick() {
+  const track   = document.getElementById('promo-toggle');
+  const saving  = document.getElementById('promo-toggle-saving');
+  const token   = localStorage.getItem('exon_token');
+  const enabled = track.classList.toggle('on');
+  saving.style.display = 'block';
+  const r = await fetch('/api/admin/pricing-table', {
+    method: 'POST', headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+    body: JSON.stringify({ allow_promotion_codes: enabled }),
+  });
+  saving.style.display = 'none';
+  if (!r.ok) {
+    track.classList.toggle('on'); // revert
+    const d = await r.json();
+    alert('Error: ' + d.error);
+  }
 }
 
 async function createCoupon() {
