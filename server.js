@@ -253,7 +253,9 @@ async function writeKeyToCF(key, discordId, plan) {
 }
 
 async function writeUserToCF(user) {
-  await cfWrite(`user:${user.discord_id}`, user);
+  // Merge — never clobber profile customizations stored in CF KV
+  const existing = (await cfRead(`user:${user.discord_id}`)) ?? {};
+  await cfWrite(`user:${user.discord_id}`, { ...existing, ...user });
 }
 
 async function restoreUserFromCF(discordId) {
@@ -531,7 +533,22 @@ app.get('/auth/discord/callback', async (req, res) => {
       : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(id) % 6n)}.png`;
 
     db.upsertUser(id, username, avatarUrl);
-    writeUserToCF(db.getUser(id));
+    // Merge fresh auth fields into existing CF KV record — do NOT overwrite profile customizations
+    (async () => {
+      try {
+        const existing = (await cfRead(`user:${id}`)) ?? {};
+        const dbUser   = db.getUser(id);
+        await cfWrite(`user:${id}`, {
+          ...existing,           // keep bio, accent_color, hero_pattern, social_links, vanity, etc.
+          ...dbUser,             // sync role, banned from DB
+          discord_id: id,
+          username,
+          avatar: avatarUrl,
+        });
+      } catch (err) {
+        console.error('CF merge error on login:', err.message);
+      }
+    })();
     updateSearchIndex(id, username, avatarUrl).catch(() => {});
 
     // Auto-join Discord server
