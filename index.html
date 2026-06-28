@@ -387,7 +387,8 @@
   <h2 class="section-title">Feature List</h2>
 
   <div class="feat-tabs">
-    <button class="feat-tab active" data-tab="player">Player</button>
+    <button class="feat-tab active" data-tab="aimbot">Aimbot</button>
+    <button class="feat-tab" data-tab="player">Player</button>
     <button class="feat-tab" data-tab="world">World</button>
     <button class="feat-tab" data-tab="exploits">Exploits</button>
     <button class="feat-tab" data-tab="configs">Configs</button>
@@ -395,8 +396,91 @@
 
   <div class="feat-panels">
 
+    <!-- AIMBOT -->
+    <div class="feat-panel active" id="tab-aimbot">
+      <div class="feat-grid">
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Aimbot Toggle</strong>
+            <p>Lock onto targets automatically with a single switch.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Activation Modes</strong>
+            <p>Choose how the aimbot engages: hold the keybind, toggle it on, or leave it always active.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Custom Keybind</strong>
+            <p>Bind aimbot activation to any key you want.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Max Distance</strong>
+            <p>Configurable slider limits how far away the aimbot will lock onto a target.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Smoothing</strong>
+            <p>Adjustable smoothing factor for natural, less robotic aim transitions.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>FOV Slider</strong>
+            <p>Controls how wide an area the aimbot scans for targets.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Draw FOV</strong>
+            <p>Optionally render the aimbot's FOV circle on-screen with a customizable color.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Aim Style</strong>
+            <p>Switch between direct snap-aim and a smoother orbital aiming technique.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Prediction</strong>
+            <p>Leads your aim ahead of moving targets, with a configurable prediction strength.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Visible Check</strong>
+            <p>Only locks onto targets that are actually visible — no aiming through solid walls.</p>
+          </div>
+        </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Triggerbot</strong>
+            <p>Automatically fires the moment a target is locked, with selectable Hold, Tap, or Full Auto modes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- PLAYER -->
-    <div class="feat-panel active" id="tab-player">
+    <div class="feat-panel" id="tab-player">
       <div class="feat-grid">
         <div class="feat-item">
           <span class="feat-dot"></span>
@@ -431,13 +515,6 @@
           <div>
             <strong>Survivor Distance</strong>
             <p>Real-time distance readout shown beneath each survivor's name tag.</p>
-          </div>
-        </div>
-        <div class="feat-item">
-          <span class="feat-dot"></span>
-          <div>
-            <strong>Blind Progress</strong>
-            <p>Tracks and displays the blind progress bar for each survivor in view.</p>
           </div>
         </div>
         <div class="feat-item">
@@ -503,6 +580,13 @@
             <p>Toggleable crosshair overlay for consistent aim reference on the killer side.</p>
           </div>
         </div>
+        <div class="feat-item">
+          <span class="feat-dot"></span>
+          <div>
+            <strong>Killer Blind Progress</strong>
+            <p>Tracks and displays the killer's blind progress bar whenever it's active.</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -533,15 +617,15 @@
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Totem Labels</strong>
-            <p>All dull and hex totems labeled on the overlay — prioritize cleansing without guessing.</p>
+            <strong>Totem Labels & Auras</strong>
+            <p>All dull and hex totems labeled and outlined with an aura — prioritize cleansing without guessing.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Exit Gate Labels</strong>
-            <p>Both exit gates marked the moment they become active so you always know the escape route.</p>
+            <strong>Exit Gate Labels & Auras</strong>
+            <p>Both exit gates marked with a label and aura the moment they become active so you always know the escape route.</p>
           </div>
         </div>
         <div class="feat-item">
@@ -561,15 +645,15 @@
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Trap Labels</strong>
-            <p>Bear traps and killer traps labeled so you never step into one blindly.</p>
+            <strong>Trap Labels & Auras</strong>
+            <p>Bear traps and killer traps labeled and outlined with an aura so you never step into one blindly.</p>
           </div>
         </div>
         <div class="feat-item">
           <span class="feat-dot"></span>
           <div>
-            <strong>Hatch Label</strong>
-            <p>Hatch location shown the moment it spawns — always know your last-resort escape.</p>
+            <strong>Hatch Label & Aura</strong>
+            <p>Hatch location shown with a label and aura the moment it spawns — always know your last-resort escape.</p>
           </div>
         </div>
         <div class="feat-item">
