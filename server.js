@@ -957,6 +957,32 @@ app.post('/api/loader/verify', express.json(), async (req, res) => {
   // Update last_seen (fire and forget)
   updateLastSeen(discord_id).catch(() => {});
 
+  // Discord staff webhook (fire and forget)
+  if (process.env.DISCORD_STAFF_WEBHOOK) {
+    const username  = dbUser?.username ?? `<@${discord_id}>`;
+    const activePlan = keysSummary.find(k => k.status === 'active')?.plan ?? keysSummary[0]?.plan ?? 'Unknown';
+    const color = role === 'developer' ? 0x7c3aed : role === 'staff' ? 0xf07a12 : 0x4ade80;
+    const embed = {
+      embeds: [{
+        title:       '🔐 Loader Auth',
+        color,
+        fields: [
+          { name: 'User',    value: `${username} (<@${discord_id}>)`, inline: true },
+          { name: 'Role',    value: role,                              inline: true },
+          { name: 'Plan',    value: activePlan,                        inline: true },
+          { name: 'HWID',    value: `\`${hwid.slice(0, 16)}…\``,      inline: true },
+        ],
+        timestamp:   new Date().toISOString(),
+        footer:      { text: 'ExonLoader' },
+      }],
+    };
+    fetch(process.env.DISCORD_STAFF_WEBHOOK, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(embed),
+    }).catch(() => {});
+  }
+
   console.log(`Loader verify OK for ${discord_id} — ${combinedMs / 60000 | 0}m combined remaining`);
 
   return res.json({

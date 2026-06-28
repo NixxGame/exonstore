@@ -1,15 +1,13 @@
 // ── LOADER FILE SIZE ──────────────────────────────────────────────────────
-(async function fetchLoaderSize() {
-  const el = document.getElementById('dl-size');
-  if (!el) return;
-  try {
-    const res  = await fetch('/api/loader/version');
-    const data = await res.json();
-    el.textContent = data.size_mb ? parseFloat(data.size_mb).toFixed(2) + ' MB' : '';
-  } catch {
-    el.textContent = '';
-  }
-})();
+// Formats a size given in MB (as pushed by publish.ps1) into whichever unit
+// reads best: KB for sub-1MB builds, MB for the normal range, GB for big ones.
+function formatLoaderSize(mbStr) {
+  const mb = parseFloat(mbStr);
+  if (!mb || isNaN(mb)) return '';
+  if (mb < 1) return Math.round(mb * 1024) + ' KB';
+  if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+  return mb.toFixed(1) + ' MB';
+}
 
 // ── AUTH & PROFILE ─────────────────────────────────────────────────────────
 
@@ -589,7 +587,7 @@ async function loadLoaderInfo() {
     const sz  = document.getElementById('dl-size');
     if (ver) ver.textContent = 'v' + (d.version ?? '');
     if (lnk && d.url) lnk.href = d.url;
-    if (sz)  sz.textContent = d.size_mb ? d.size_mb + ' MB' : '';
+    if (sz)  sz.textContent = d.size_mb ? formatLoaderSize(d.size_mb) : '';
   } catch {}
 }
 if (document.getElementById('dl-version')) loadLoaderInfo();
