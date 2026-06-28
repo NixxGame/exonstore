@@ -1278,6 +1278,10 @@ app.get('/u/:slug', (req, res) => res.sendFile(path.join(__dirname, 'profile.htm
 app.get('/u/:slug/followers', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
 app.get('/u/:slug/following', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
 
+// ── Standalone public download page (shareable link, no auth) ───────────────
+
+app.get('/download', (req, res) => res.sendFile(path.join(__dirname, 'download.html')));
+
 // ── API: resolve vanity slug → discord_id ────────────────────────────────────
 
 app.get('/api/resolve/:slug', looseLimit, async (req, res) => {

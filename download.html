@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download — Exon External</title>
+  <meta name="description" content="Download the latest Exon External loader.">
+  <link rel="icon" type="image/png" href="assets/exon.png">
+  <link rel="apple-touch-icon" href="assets/exon.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    .dl-page-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; }
+    .dl-page-card { width: 100%; max-width: 480px; }
+    .dl-page-eyebrow { text-align: center; }
+    .dl-page-title { text-align: center; margin-bottom: 28px; }
+    .dl-page-status { margin: 0 0 18px; padding: 9px 16px; border-radius: 10px; font-size: .82rem; font-weight: 600; text-align: center; display: none; }
+    .dl-page-status.offline { display: block; background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.25); color: #ef4444; }
+    .dl-page-status.maintenance { display: block; background: rgba(240,122,18,.1); border: 1px solid rgba(240,122,18,.25); color: #f07a12; }
+    .dl-page-changelog { margin-top: 18px; padding: 16px 18px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+    .dl-page-changelog-label { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+    .dl-page-changelog-text { font-size: .88rem; color: var(--text); line-height: 1.5; }
+    .dl-page-back { display: block; text-align: center; margin-top: 26px; }
+  </style>
+</head>
+<body>
+<div class="bg-canvas">
+  <div class="bg-noise"></div>
+  <div class="bg-orb bg-orb-1"></div>
+  <div class="bg-orb bg-orb-2"></div>
+  <div class="bg-grid"></div>
+</div>
+
+<div class="dl-page-wrap">
+  <div class="dl-page-card">
+
+    <div class="section-eyebrow dl-page-eyebrow">Client</div>
+    <h1 class="section-title dl-page-title">Download Loader</h1>
+
+    <div id="dl-page-status" class="dl-page-status"></div>
+
+    <div class="dl-card">
+      <div class="dl-file-row">
+        <div class="dl-file-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="2" width="14" height="18" rx="2" fill="rgba(240,122,18,.12)" stroke="rgba(240,122,18,.4)" stroke-width="1.4"/>
+            <rect x="13" y="2" width="4" height="4" rx="1" fill="rgba(240,122,18,.25)"/>
+            <path d="M7 10h7M7 13h5" stroke="rgba(240,122,18,.6)" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="dl-file-info">
+          <div class="dl-file-name">loader.exe</div>
+          <div class="dl-file-meta">
+            <span class="dl-badge">Windows x64</span>
+            <span class="dl-version" id="dl-version">…</span>
+            <span class="dl-size" id="dl-size"></span>
+          </div>
+        </div>
+        <a href="#" id="dl-link" download="ExonLoader.exe" class="dl-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3v13M6 11l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Download
+        </a>
+      </div>
+    </div>
+
+    <div id="dl-page-changelog-wrap" class="dl-page-changelog" style="display:none">
+      <div class="dl-page-changelog-label">Latest changes</div>
+      <div class="dl-page-changelog-text" id="dl-page-changelog-text"></div>
+    </div>
+
+    <a href="index.html" class="back-link dl-page-back">← Back to Home</a>
+
+  </div>
+</div>
+
+<script>
+  function formatLoaderSize(mbStr) {
+    const mb = parseFloat(mbStr);
+    if (!mb || isNaN(mb)) return '';
+    if (mb < 1) return Math.round(mb * 1024) + ' KB';
+    if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+    return mb.toFixed(1) + ' MB';
+  }
+
+  async function loadDownloadPage() {
+    try {
+      const [infoRes, statusRes] = await Promise.all([
+        fetch('/api/loader/info'),
+        fetch('/api/loader/status')
+      ]);
+
+      if (infoRes.ok) {
+        const d = await infoRes.json();
+        const ver = document.getElementById('dl-version');
+        const lnk = document.getElementById('dl-link');
+        const sz  = document.getElementById('dl-size');
+        if (ver) ver.textContent = 'v' + (d.version ?? '');
+        if (lnk && d.url) lnk.href = d.url;
+        if (sz) sz.textContent = d.size_mb ? formatLoaderSize(d.size_mb) : '';
+      }
+
+      if (statusRes.ok) {
+        const s = await statusRes.json();
+        const banner = document.getElementById('dl-page-status');
+        if (banner) {
+          if (s.maintenance) {
+            banner.className = 'dl-page-status maintenance';
+            banner.textContent = s.message || 'Loader is under maintenance.';
+          } else if (s.online === false) {
+            banner.className = 'dl-page-status offline';
+            banner.textContent = s.message || 'Loader is currently offline.';
+          }
+        }
+        if (s.changelog) {
+          document.getElementById('dl-page-changelog-text').textContent = s.changelog;
+          document.getElementById('dl-page-changelog-wrap').style.display = 'block';
+        }
+      }
+    } catch {}
+  }
+
+  loadDownloadPage();
+</script>
+</body>
+</html>
